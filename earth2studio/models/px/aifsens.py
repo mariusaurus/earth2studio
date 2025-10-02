@@ -189,15 +189,19 @@ class AIFSENS(torch.nn.Module, AutoModelMixin, PrognosticMixin):
         longitudes: torch.Tensor,
         interpolation_matrix: torch.Tensor,
         inverse_interpolation_matrix: torch.Tensor,
+        # variables: np.array = np.array(VARIABLES),
     ) -> None:
         super().__init__()
         self.model = model
+        # self.variables = variables
         self.register_buffer("latitudes", latitudes)
         self.register_buffer("longitudes", longitudes)
         self.register_buffer("interpolation_matrix", interpolation_matrix)
         self.register_buffer(
             "inverse_interpolation_matrix", inverse_interpolation_matrix
         )
+
+        self.variables = self.input_variables
 
     def __str__(self) -> str:
         return "aifs-ens-1.0"
@@ -672,7 +676,7 @@ class AIFSENS(torch.nn.Module, AutoModelMixin, PrognosticMixin):
                 :,
                 1,
             ]
-            out[..., 1, :, self.model.data_indices.data.output.full] = y
+            out[..., 1, :, self.model.data_indices.data.output.full] = y[:,0,:,:]
             out[..., 1, :, self.model.data_indices.data.input.forcing] = x[
                 :, 1, :, self.model.data_indices.model.input.forcing
             ]
