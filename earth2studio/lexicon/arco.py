@@ -96,6 +96,12 @@ class ARCOLexicon(metaclass=LexiconType):
         "tp": "total_precipitation::",
         "lsm": "land_sea_mask::",
         "z": "geopotential_at_surface::",
+        "sdor": "standard_deviation_of_orography::",
+        "skt": "skin_temperature::",
+        "slor": "slope_of_sub_gridscale_orography::",
+        "tcw": "total_column_water::",
+        "stl1": "soil_temperature_level_1::",
+        "stl2": "soil_temperature_level_2::",
     }
     VOCAB.update({f"u{level}": f"u_component_of_wind::{level}" for level in LEVELS})
     VOCAB.update({f"v{level}": f"v_component_of_wind::{level}" for level in LEVELS})
