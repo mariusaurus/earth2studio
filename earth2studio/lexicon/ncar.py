@@ -43,6 +43,7 @@ class NCAR_ERA5Lexicon(metaclass=LexiconType):
             "t": (130, "t", "e5.oper.an.pl", "ll025sc"),
             "u": (131, "u", "e5.oper.an.pl", "ll025uv"),
             "v": (132, "v", "e5.oper.an.pl", "ll025uv"),
+            "w": (135, "w", "e5.oper.an.pl", "ll025sc"),
             "q": (133, "q", "e5.oper.an.pl", "ll025sc"),
             "sp": (134, "sp", "e5.oper.an.sfc", "ll025sc"),
             "tcwv": (137, "tcwv", "e5.oper.an.sfc", "ll025sc"),
@@ -54,6 +55,13 @@ class NCAR_ERA5Lexicon(metaclass=LexiconType):
             "t2m": (167, "2t", "e5.oper.an.sfc", "ll025sc"),
             "u100m": (246, "100u", "e5.oper.an.sfc", "ll025sc"),
             "v100m": (247, "100v", "e5.oper.an.sfc", "ll025sc"),
+            "lsm": (172, "lsm", "e5.oper.invariant", "ll025sc"),
+            "sdor": (160, "sdor", "e5.oper.invariant", "ll025sc"),
+            "skt": (235, "skt", "e5.oper.an.sfc", "ll025sc"),
+            "slor": (163, "slor", "e5.oper.invariant", "ll025sc"),
+            "tcw": (136, "tcw", "e5.oper.an.sfc", "ll025sc"),
+            "stl1": (139, "stl1", "e5.oper.an.sfc", "ll025sc"),
+            "stl2": (170, "stl2", "e5.oper.an.sfc", "ll025sc"),
         }
         pressure_levels = [
             1,
@@ -111,6 +119,8 @@ class NCAR_ERA5Lexicon(metaclass=LexiconType):
                     product=product, n=n, eid=eid, ename=ename, grid=grid, level=0
                 )
                 vocab[var] = formatted_pattern
+
+        vocab['z'] = 'e5.oper.invariant::128_129_z::ll025sc::0'
 
         return vocab
 

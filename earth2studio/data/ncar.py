@@ -219,7 +219,7 @@ class NCAR_ERA5:
         """
         tasks: dict[str, NCARAsyncTask] = {}  # group pressure-level variables
 
-        s3_pattern = "s3://nsf-ncar-era5/{product}/{year}{month:02}/{product}.{variable}.{grid}.{year}{month:02}{daystart:02}00_{year}{month:02}{dayend:02}23.nc"
+        s3_pattern = "s3://nsf-ncar-era5/{product}/{year}{month:02}/{product}.{variable}.{grid}.{year}{month:02}{daystart:02}{hourstart:02}_{year}{month:02}{dayend:02}{hourend:02}.nc"
         for i, t in enumerate(time):
             for j, v in enumerate(variable):
                 ncar_name, _ = NCAR_ERA5Lexicon[v]
@@ -231,10 +231,19 @@ class NCAR_ERA5:
                 data_variable = f"{variable_name.split('_')[-1].upper()}"
 
                 # Pressure is held in daily nc files
+                hourstart = 0
+                hourend = 23
+                tt = t
                 if product == "e5.oper.an.pl":
                     daystart = t.day
                     dayend = t.day
                     time_index = t.hour
+                elif product == "e5.oper.invariant":
+                    tt = datetime(1979, 1, 1, 0, 0, 0)
+                    daystart = tt.day
+                    dayend = tt.day
+                    time_index = tt.hour
+                    hourend = 0
                 # Surface held in monthly
                 else:
                     daystart = 1
@@ -247,20 +256,22 @@ class NCAR_ERA5:
                     product=product,
                     variable=variable_name,
                     grid=grid,
-                    year=t.year,
-                    month=t.month,
+                    year=tt.year,
+                    month=tt.month,
                     daystart=daystart,
                     dayend=dayend,
+                    hourstart=hourstart,
+                    hourend=hourend,
                 )
 
                 if file_name in tasks:
-                    tasks[file_name].ncar_time_indices[time_index] = t
+                    tasks[file_name].ncar_time_indices[time_index] = tt
                     tasks[file_name].ncar_level_indices[level_index] = v
                 else:
                     tasks[file_name] = NCARAsyncTask(
                         ncar_file_uri=file_name,
                         ncar_data_variable=data_variable,
-                        ncar_time_indices={time_index: t},
+                        ncar_time_indices={time_index: tt},
                         ncar_level_indices={level_index: v},
                     )
 
