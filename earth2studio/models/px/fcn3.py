@@ -13,7 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import importlib.util
 import json
 from collections import OrderedDict
 from collections.abc import Generator, Iterator
@@ -22,6 +21,7 @@ from datetime import datetime
 import numpy as np
 import torch
 from loguru import logger
+from packaging.version import Version
 
 from earth2studio.models.auto import AutoModelMixin, Package
 from earth2studio.models.batch import batch_coords, batch_func
@@ -36,12 +36,22 @@ from earth2studio.utils.time import timearray_to_datetime
 from earth2studio.utils.type import CoordSystem
 
 try:
+    import torch_harmonics
     from makani.models.model_package import load_model_package
 except ImportError:
     OptionalDependencyFailure("fcn3")
     load_model_package = None
+    _cuda_extension_available = False
 
-_cuda_extension_available = importlib.util.find_spec("disco_cuda_extension") is not None
+if Version(torch_harmonics.__version__) >= Version("0.8.1"):
+    from torch_harmonics.disco import cuda_kernels_is_available
+
+    _cuda_extension_available = cuda_kernels_is_available()
+else:
+    from importlib.util import find_spec
+
+    _cuda_extension_available = find_spec("disco_cuda_extension") is not None
+
 
 VARIABLES = [
     "u10m",
