@@ -39,12 +39,13 @@ from earth2studio.models.dx.tc_tracking import (
     TCTrackerWuDuan,
 )
 from earth2studio.models.dx.tempest_extremes import (
-    TempestExtremes,
     AsyncTempestExtremes,
+    TempestExtremes,
 )
 from earth2studio.models.dx.wind_gust import WindgustAFNO  # noqa
 
 __all__ = [
+    "AsyncTempestExtremes",
     "ClimateNet",
     "CorrDiff",
     "CorrDiffTaiwan",
@@ -52,5 +53,6 @@ __all__ = [
     "PrecipitationAFNOv2",
     "SolarRadiationAFNO1H",
     "SolarRadiationAFNO6H",
+    "TempestExtremes",
     "WindgustAFNO",
 ]
