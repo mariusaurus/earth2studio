@@ -40,6 +40,7 @@ class HAFSLexicon(metaclass=LexiconType):
     def build_vocab() -> dict[str, str]:
         """Create HAFS vocab dictionary"""
         sfc_variables = {
+            "wind": "wrfsfc::WIND::10 m above ground",
             "u10m": "wrfsfc::UGRD::10 m above ground",
             "v10m": "wrfsfc::VGRD::10 m above ground",
             "u80m": "wrfsfc::UGRD::80 m above ground",

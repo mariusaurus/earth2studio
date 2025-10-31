@@ -97,6 +97,10 @@ class HAFS:
     domain : str, optional
         Domain to use ('parent' or 'storm'), by default 'parent'
         Note: 'storm' domain is not yet implemented
+    storm_id : str, optional
+        Storm ID for file naming, by default '10l'
+    model_id : str, optional
+        Model ID for file naming, by default 'hfsa'
     max_workers : int, optional
         Max works in async io thread pool. Only applied when using sync call function
         and will modify the default async loop if one exists, by default 24
@@ -123,14 +127,6 @@ class HAFS:
     HAFS_BUCKET_NAME = "noaa-nws-hafs-pds"
     MAX_BYTE_SIZE = 5000000
 
-    # Native LCC coordinates - using same grid as HRRR (HAFS uses similar grid structure)
-    # Grid parameters may need adjustment based on actual HAFS grid specifications
-    # HAFS_X = np.linspace(-2697520.1425219304, 2696479.8574780696, 1799, endpoint=True)
-    # HAFS_Y = np.linspace(-1587306.1525566636, 1586693.8474433364, 1059, endpoint=True)
-
-    # Model ID - can change in later files (10l, 11l, etc.)
-    MODEL_ID = "10l"
-
     @staticmethod
     def _product_to_hafs_type(product: str) -> str:
         """Map HRRR-style product names to HAFS file type identifiers
@@ -152,6 +148,8 @@ class HAFS:
         self,
         source: str = "aws",
         domain: str = "parent",
+        storm_id: str = "10l",
+        model_id: str = "hfsa",
         max_workers: int = 24,
         cache: bool = True,
         verbose: bool = True,
@@ -170,6 +168,8 @@ class HAFS:
             raise NotImplementedError("Storm domain is not yet implemented")
 
         self._domain = domain
+        self._storm_id = storm_id
+        self._model_id = model_id
 
         self.lexicon = HAFSLexicon
         self.async_timeout = async_timeout
@@ -339,11 +339,7 @@ class HAFS:
 
         # Determine grid dimensions by fetching one variable first
         # HAFS grid dimensions need to be read from the actual data
-        grid_height, grid_width, lat, lon = await self._determine_grid_size(time[0])
-
-        # Generate HAFS lat-lon grid coordinates based on actual grid size
-        hafs_x = np.arange(grid_width)
-        hafs_y = np.arange(grid_height)
+        lat, lon = await self._determine_grid_size(time[0])
 
         # Note, this could be more memory efficient and avoid pre-allocation of the array
         # but this is much much cleaner to deal with
@@ -353,23 +349,19 @@ class HAFS:
                     len(time),
                     1,
                     len(variable),
-                    grid_height,
-                    grid_width,
+                    len(lat),
+                    len(lon),
                 )
             ),
-            dims=["time", "lead_time", "variable", "hafs_y", "hafs_x"],
+            dims=["time", "lead_time", "variable", "lat", "lon"],
             coords={
                 "time": time,
                 "lead_time": [timedelta(hours=0)],
                 "variable": variable,
-                "hafs_x": hafs_x,
-                "hafs_y": hafs_y,
-                "lat": (("hafs_y", "hafs_x"), lat),
-                "lon": (("hafs_y", "hafs_x"), lon),
+                "lat": lat,
+                "lon": lon,
             },
         )
-        xr_array["hafs_y"].attrs = {"standard_name": "latitude", "axis": "Y"}
-        xr_array["hafs_x"].attrs = {"standard_name": "longitude", "axis": "X"}
 
         async_tasks = []
         async_tasks = await self._create_tasks(time, [timedelta(hours=0)], variable)
@@ -442,7 +434,16 @@ class HAFS:
 
                         # Create index key to find byte range
                         hafs_key = f"{variable_name}::{level}"
-                        if forecastvld:
+
+                        if variable_name in ["WIND"]:
+                            hours = int(lt.total_seconds() // 3600)
+                            if hours == 0:
+                                hafs_key = f"{hafs_key}::0-0 day max fcst"
+                            else:
+                                hafs_key = (
+                                    f"{hafs_key}::{hours-1}-{hours} hour max fcst"
+                                )
+                        elif forecastvld:
                             hafs_key = f"{hafs_key}::{forecastvld}"
                         else:
                             if lt.total_seconds() == 0:
@@ -557,7 +558,7 @@ class HAFS:
 
     async def _determine_grid_size(
         self, time: datetime
-    ) -> tuple[int, int, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Determine HAFS grid dimensions by reading one variable from a GRIB file
 
         Parameters
@@ -567,8 +568,8 @@ class HAFS:
 
         Returns
         -------
-        tuple[int, int, np.ndarray, np.ndarray]
-            Grid dimensions (height, width) and lat/lon coordinate arrays
+        tuple[np.ndarray, np.ndarray]
+            Lat/lon coordinate arrays
         """
         # Fetch index file for wrfprs (pressure level) product
         index_uri = self._grib_index_uri(time, timedelta(hours=0), "wrfprs")
@@ -626,20 +627,8 @@ class HAFS:
         if "latitude" in da.coords and "longitude" in da.coords:
             lat = da.coords["latitude"].values
             lon = da.coords["longitude"].values
-            # Handle 1D or 2D coordinate arrays
-            if lat.ndim == 1 and lon.ndim == 1:
-                # Create meshgrid from 1D coordinates
-                lon_2d, lat_2d = np.meshgrid(lon, lat)
-                lat = lat_2d
-                lon = lon_2d
-            elif lat.ndim == 2 and lon.ndim == 2:
-                # Already 2D
-                pass
-            else:
-                # Fallback: create meshgrid if shapes are compatible
-                lat = np.zeros((height, width))
-                lon = np.zeros((height, width))
         elif "lat" in da.coords and "lon" in da.coords:
+            print("1" * 85)
             lat = da.coords["lat"].values
             lon = da.coords["lon"].values
             if lat.ndim == 1 and lon.ndim == 1:
@@ -647,16 +636,17 @@ class HAFS:
                 lat = lat_2d
                 lon = lon_2d
         else:
+            print("2" * 85)
             # No coordinates found, create placeholder arrays
             lat = np.zeros((height, width))
             lon = np.zeros((height, width))
 
-        # Ensure lat/lon are 2D arrays
-        if lat.ndim != 2 or lon.ndim != 2:
-            lat = np.zeros((height, width))
-            lon = np.zeros((height, width))
+        # # Ensure lat/lon are 2D arrays
+        # if lat.ndim != 2 or lon.ndim != 2:
+        #     lat = np.zeros((height, width))
+        #     lon = np.zeros((height, width))
 
-        return height, width, lat, lon
+        return lat, lon
 
     def _validate_time(self, times: list[datetime]) -> None:
         """Verify if date time is valid for HAFS based on offline knowledge
@@ -749,15 +739,15 @@ class HAFS:
     ) -> str:
         """Generates the URI for HAFS grib files
 
-        HAFS file naming: {model_id}.YYYYMMDDHH.hfsa.{domain}.{type}.f{lead_hour}.grb2
-        Example: 10l.2024092900.hfsa.parent.atm.f000.grb2
+        HAFS file naming: {storm_id}.YYYYMMDDHH.{model_id}.{domain}.{type}.f{lead_hour}.grb2
+        Example: 10l.2024093000.hfsa.parent.atm.f000.grb2
         """
         lead_hour = int(lead_time.total_seconds() // 3600)
         hafs_type = self._product_to_hafs_type(product)
-        # HAFS structure: hfsa/YYYYMMDD/HH/{model_id}.YYYYMMDDHH.hfsa.{domain}.{type}.f{lead_hour}.grb2
+        # HAFS structure: hfsa/YYYYMMDD/HH/{storm_id}.YYYYMMDDHH.{model_id}.{domain}.{type}.f{lead_hour}.grb2
         file_name = f"hfsa/{time.year}{time.month:0>2}{time.day:0>2}/{time.hour:0>2}/"
         time_str = f"{time.year}{time.month:0>2}{time.day:0>2}{time.hour:0>2}"
-        filename = f"{self.MODEL_ID}.{time_str}.hfsa.{self._domain}.{hafs_type}.f{lead_hour:03d}.grb2"
+        filename = f"{self._storm_id}.{time_str}.{self._model_id}.{self._domain}.{hafs_type}.f{lead_hour:03d}.grb2"
         file_name = os.path.join(file_name, filename)
         return os.path.join(self.uri_prefix, file_name)
 
@@ -766,15 +756,15 @@ class HAFS:
     ) -> str:
         """Generates the URI for HAFS index grib files
 
-        HAFS file naming: {model_id}.YYYYMMDDHH.hfsa.{domain}.{type}.f{lead_hour}.grb2.idx
-        Example: 10l.2024092900.hfsa.parent.atm.f000.grb2.idx
+        HAFS file naming: {storm_id}.YYYYMMDDHH.{model_id}.{domain}.{type}.f{lead_hour}.grb2.idx
+        Example: 10l.2024093000.hfsa.parent.atm.f000.grb2.idx
         """
         lead_hour = int(lead_time.total_seconds() // 3600)
         hafs_type = self._product_to_hafs_type(product)
-        # HAFS structure: hfsa/YYYYMMDD/HH/{model_id}.YYYYMMDDHH.hfsa.{domain}.{type}.f{lead_hour}.grb2.idx
+        # HAFS structure: hfsa/YYYYMMDD/HH/{storm_id}.YYYYMMDDHH.{model_id}.{domain}.{type}.f{lead_hour}.grb2.idx
         file_name = f"hfsa/{time.year}{time.month:0>2}{time.day:0>2}/{time.hour:0>2}/"
         time_str = f"{time.year}{time.month:0>2}{time.day:0>2}{time.hour:0>2}"
-        filename = f"{self.MODEL_ID}.{time_str}.hfsa.{self._domain}.{hafs_type}.f{lead_hour:03d}.grb2.idx"
+        filename = f"{self._storm_id}.{time_str}.{self._model_id}.{self._domain}.{hafs_type}.f{lead_hour:03d}.grb2.idx"
         file_name = os.path.join(file_name, filename)
         return os.path.join(self.uri_prefix, file_name)
 
@@ -833,6 +823,8 @@ class HAFS:
         cls,
         time: datetime | np.datetime64,
         domain: str = "parent",
+        storm_id: str = "10l",
+        model_id: str = "hfsa",
     ) -> bool:
         """Checks if given date time is avaliable in the HAFS object store. Uses S3
         store
@@ -843,6 +835,10 @@ class HAFS:
             Date time to access
         domain : str, optional
             Domain to check ('parent' or 'storm'), by default 'parent'
+        storm_id : str, optional
+            Storm ID for file naming, by default '10l'
+        model_id : str, optional
+            Model ID for file naming, by default 'hfsa'
 
         Returns
         -------
@@ -865,7 +861,7 @@ class HAFS:
         # Just picking the first variable to look for (using atm type from wrfnat)
         file_name = f"hfsa/{time.year}{time.month:0>2}{time.day:0>2}/{time.hour:0>2}/"
         time_str = f"{time.year}{time.month:0>2}{time.day:0>2}{time.hour:0>2}"
-        filename = f"{cls.MODEL_ID}.{time_str}.hfsa.{domain}.atm.f000.grb2.idx"
+        filename = f"{storm_id}.{time_str}.{model_id}.{domain}.atm.f000.grb2.idx"
         file_name = f"{file_name}{filename}"
         s3_uri = f"s3://{cls.HAFS_BUCKET_NAME}/{file_name}"
         exists = fs.exists(s3_uri)
