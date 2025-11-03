@@ -36,14 +36,14 @@ from tqdm.asyncio import tqdm
 
 from earth2studio.data.utils import (
     datasource_cache_root,
-    prep_data_inputs,
+    prep_forecast_inputs,
 )
 from earth2studio.lexicon.hafs import HAFSLexicon
 from earth2studio.utils.imports import (
     OptionalDependencyFailure,
     check_optional_dependencies,
 )
-from earth2studio.utils.type import TimeArray, VariableArray
+from earth2studio.utils.type import LeadTimeArray, TimeArray, VariableArray
 
 try:
     import pyproj
@@ -238,6 +238,7 @@ class HAFS:
     def __call__(
         self,
         time: datetime | list[datetime] | TimeArray,
+        lead_time: timedelta | list[timedelta] | LeadTimeArray,
         variable: str | list[str] | VariableArray,
     ) -> xr.DataArray:
         """Retrieve HAFS analysis data (lead time 0)
@@ -271,7 +272,9 @@ class HAFS:
             loop.run_until_complete(self._async_init())
 
         xr_array = loop.run_until_complete(
-            asyncio.wait_for(self.fetch(time, variable), timeout=self.async_timeout)
+            asyncio.wait_for(
+                self.fetch(time, lead_time, variable), timeout=self.async_timeout
+            )
         )
 
         return xr_array
@@ -279,6 +282,7 @@ class HAFS:
     async def fetch(
         self,
         time: datetime | list[datetime] | TimeArray,
+        lead_time: timedelta | list[timedelta] | LeadTimeArray,
         variable: str | list[str] | VariableArray,
     ) -> xr.DataArray:
         """Async function to get data
@@ -303,7 +307,8 @@ class HAFS:
             loop!"
             )
 
-        time, variable = prep_data_inputs(time, variable)
+        # time, variable = prep_data_inputs(time, variable)
+        time, lead_time, variable = prep_forecast_inputs(time, lead_time, variable)
         # Create cache dir if doesnt exist
         pathlib.Path(self.cache).mkdir(parents=True, exist_ok=True)
 
@@ -318,7 +323,7 @@ class HAFS:
 
         # Determine grid dimensions by fetching one variable first
         # HAFS grid dimensions need to be read from the actual data
-        lat, lon = await self._determine_grid_size(time[0])
+        lat, lon = await self._determine_grid_size(time[0], lead_time[0])
 
         # Note, this could be more memory efficient and avoid pre-allocation of the array
         # but this is much much cleaner to deal with
@@ -326,7 +331,7 @@ class HAFS:
             data=np.zeros(
                 (
                     len(time),
-                    1,
+                    len(lead_time),
                     len(variable),
                     len(lat),
                     len(lon),
@@ -335,7 +340,7 @@ class HAFS:
             dims=["time", "lead_time", "variable", "lat", "lon"],
             coords={
                 "time": time,
-                "lead_time": [timedelta(hours=0)],
+                "lead_time": lead_time,
                 "variable": variable,
                 "lat": lat,
                 "lon": lon,
@@ -343,7 +348,7 @@ class HAFS:
         )
 
         async_tasks = []
-        async_tasks = await self._create_tasks(time, [timedelta(hours=0)], variable)
+        async_tasks = await self._create_tasks(time, lead_time, variable)
         func_map = map(
             functools.partial(self.fetch_wrapper, xr_array=xr_array), async_tasks
         )
@@ -360,8 +365,6 @@ class HAFS:
         if session:
             await session.close()
 
-        xr_array = xr_array.isel(lead_time=0)
-        del xr_array.coords["lead_time"]
         return xr_array
 
     async def _create_tasks(
@@ -536,7 +539,9 @@ class HAFS:
         return modifier(values)
 
     async def _determine_grid_size(
-        self, time: datetime
+        self,
+        time: datetime,
+        lead_time: timedelta,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Determine HAFS grid dimensions by reading one variable from a GRIB file
 
@@ -551,7 +556,7 @@ class HAFS:
             Lat/lon coordinate arrays
         """
         # Fetch index file for wrfprs (pressure level) product
-        index_uri = self._grib_index_uri(time, timedelta(hours=0), "wrfprs")
+        index_uri = self._grib_index_uri(time, lead_time, "wrfprs")
         index_dict = await self._fetch_index(index_uri)
 
         # Find the first available variable in the index to get grid dimensions
@@ -563,7 +568,7 @@ class HAFS:
         byte_offset, byte_length = index_dict[first_key]
 
         # Fetch a small sample to determine grid dimensions
-        grib_uri = self._grib_uri(time, timedelta(hours=0), "wrfprs")
+        grib_uri = self._grib_uri(time, lead_time, "wrfprs")
         grib_file = await self._fetch_remote_file(
             grib_uri,
             byte_offset=byte_offset,
@@ -721,6 +726,12 @@ class HAFS:
         HAFS file naming: {storm_id}.YYYYMMDDHH.{model_id}.{domain}.{type}.f{lead_hour}.grb2
         Example: 10l.2024093000.hfsa.parent.atm.f000.grb2
         """
+        # Convert numpy.datetime64 to Python datetime if needed
+        if isinstance(time, np.datetime64):
+            _unix = np.datetime64(0, "s")
+            _ds = np.timedelta64(1, "s")
+            time = datetime.fromtimestamp((time - _unix) / _ds, timezone.utc)
+
         lead_hour = int(lead_time.total_seconds() // 3600)
         hafs_type = self._product_to_hafs_type(product)
         # HAFS structure: hfsa/YYYYMMDD/HH/{storm_id}.YYYYMMDDHH.{model_id}.{domain}.{type}.f{lead_hour}.grb2
@@ -738,6 +749,12 @@ class HAFS:
         HAFS file naming: {storm_id}.YYYYMMDDHH.{model_id}.{domain}.{type}.f{lead_hour}.grb2.idx
         Example: 10l.2024093000.hfsa.parent.atm.f000.grb2.idx
         """
+        # Convert numpy.datetime64 to Python datetime if needed
+        if isinstance(time, np.datetime64):
+            _unix = np.datetime64(0, "s")
+            _ds = np.timedelta64(1, "s")
+            time = datetime.fromtimestamp((time - _unix) / _ds, timezone.utc)
+
         lead_hour = int(lead_time.total_seconds() // 3600)
         hafs_type = self._product_to_hafs_type(product)
         # HAFS structure: hfsa/YYYYMMDD/HH/{storm_id}.YYYYMMDDHH.{model_id}.{domain}.{type}.f{lead_hour}.grb2.idx
