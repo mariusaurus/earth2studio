@@ -146,22 +146,20 @@ class HAFS:
 
     def __init__(
         self,
-        source: str = "aws",
-        domain: str = "parent",
-        storm_id: str = "10l",
-        model_id: str = "hfsa",
+        domain: str | None = None,
+        storm_id: str | None = None,
+        model_id: str | None = None,
         max_workers: int = 24,
         cache: bool = True,
         verbose: bool = True,
         async_timeout: int = 600,
     ):
-        self._source = source
         self._cache = cache
         self._verbose = verbose
         self._max_workers = max_workers
 
         # Validate and set domain
-        if domain not in ["parent", "storm"]:
+        if domain not in ["parent", "storm", None]:
             raise ValueError(f"Invalid domain '{domain}'. Must be 'parent' or 'storm'")
 
         if domain == "storm":
@@ -174,6 +172,7 @@ class HAFS:
         self.lexicon = HAFSLexicon
         self.async_timeout = async_timeout
 
+        self._source = "aws"
         if self._source == "aws":
             self.uri_prefix = "noaa-nws-hafs-pds"
 
@@ -181,43 +180,12 @@ class HAFS:
             def _range(time: datetime) -> None:
                 # HAFS data availability may differ from HRRR
                 # TODO: Update with actual HAFS data availability dates
-                if time < datetime(year=2020, month=1, day=1, hour=0):
+                if time < datetime(year=2023, month=6, day=19, hour=18):
                     raise ValueError(
-                        f"Requested date time {time} needs to be after January 1st, 2020 00:00 for HAFS"
+                        f"Requested date {time} needs to be on or after 6th June, 2020, 6pm for HAFS"
                     )
 
             self._history_range = _range
-        # elif self._source == "google":
-        #     self.uri_prefix = "high-resolution-rapid-refresh"
-
-        #     # To update look at https://console.cloud.google.com/marketplace/product/noaa-public/hrrr
-        #     # Needs confirmation
-        #     def _range(time: datetime) -> None:
-        #         # sfc goes back to 2016 for anl, limit based on pressure
-        #         # frst starts on on the same date pressure starts
-        #         if time < datetime(year=2018, month=7, day=12, hour=13):
-        #             raise ValueError(
-        #                 f"Requested date time {time} needs to be after July 12th, 2018 13:00 for HRRR"
-        #             )
-
-        #     self._history_range = _range
-        # elif self._source == "azure":
-        #     raise NotImplementedError(
-        #         "Azure data source not implemented yet, open an issue if needed"
-        #     )
-        # elif self._source == "nomads":
-        #     # https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod/
-        #     self.uri_prefix = (
-        #         "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod/"
-        #     )
-
-        #     def _range(time: datetime) -> None:
-        #         if time + timedelta(days=2) < datetime.today():
-        #             raise ValueError(
-        #                 f"Requested date time {time} needs to be within past 2 days for HRRR nomads source"
-        #             )
-
-        #     self._history_range = _range
         else:
             raise ValueError(f"Invalid HAFS source { self._source}")
 
@@ -239,22 +207,33 @@ class HAFS:
         """
         if self._source == "aws":
             self.fs = s3fs.S3FileSystem(anon=True, client_kwargs={}, asynchronous=True)
-        # elif self._source == "google":
-        #     fs = gcsfs.GCSFileSystem(
-        #         cache_timeout=-1,
-        #         token="anon",  # noqa: S106 # nosec B106
-        #         access="read_only",
-        #         block_size=8**20,
-        #     )
-        #     fs._loop = asyncio.get_event_loop()
-        #     self.fs = fs
-        # elif self._source == "azure":
-        #     raise NotImplementedError(
-        #         "Azure data source not implemented yet, open an issue if needed"
-        #     )
         elif self._source == "nomads":
             # HTTP file system, tried FTP but didnt work
             self.fs = HTTPFileSystem(asynchronous=True)
+
+    def set_storm_model_domain(
+        self,
+        storm_id: str,
+        model_id: str,
+        domain: str,
+    ) -> None:
+        """Set the storm, model, and domain for the HAFS object"""
+        self._storm_id = storm_id
+        self._model_id = model_id
+        self._domain = domain
+
+        if self._domain not in ["parent", "storm"]:
+            raise ValueError(
+                f"Invalid domain '{self._domain}'. Must be 'parent' or 'storm'"
+            )
+
+        if self._domain == "storm":
+            raise NotImplementedError("Storm domain is not yet implemented")
+
+        if self._model_id not in ["hfsa", "hfsb"]:
+            raise ValueError(
+                f"Invalid model ID '{self._model_id}'. Must be 'hfsa' or 'hfsb'"
+            )
 
     def __call__(
         self,
@@ -867,3 +846,89 @@ class HAFS:
         exists = fs.exists(s3_uri)
 
         return exists
+
+    @classmethod
+    def list_storm_ids(
+        cls,
+        time: datetime | np.datetime64,
+        domain: str = "parent",
+        model_id: str = "hfsa",
+        return_file_names: bool = False,
+    ) -> list[str] | tuple[list[str], list[str]]:
+        """List available storm IDs for a given time from the HAFS object store.
+
+        This function lists all files in the directory for the given time and extracts
+        unique storm IDs from the filenames. File naming pattern:
+        {storm_id}.YYYYMMDDHH.{model_id}.{domain}.{type}.f{lead_hour}.grb2
+
+        Parameters
+        ----------
+        time : datetime | np.datetime64
+            Date time to check for available storm IDs
+        domain : str, optional
+            Domain to check ('parent' or 'storm'), by default 'parent'
+        model_id : str, optional
+            Model ID for file naming, by default 'hfsa'
+        return_file_names : bool, optional
+            If True, also return the list of all file names found, by default False
+
+        Returns
+        -------
+        list[str] | tuple[list[str], list[str]]
+            If return_files is False: list of unique storm IDs (sorted)
+            If return_files is True: tuple of (list of unique storm IDs, list of all file names)
+        """
+        if domain not in ["parent", "storm"]:
+            raise ValueError(f"Invalid domain '{domain}'. Must be 'parent' or 'storm'")
+
+        if model_id not in ["hfsa", "hfsb"]:
+            raise ValueError(f"Invalid model ID '{model_id}'. Must be 'hfsa' or 'hfsb'")
+
+        if isinstance(time, np.datetime64):  # np.datetime64 -> datetime
+            _unix = np.datetime64(0, "s")
+            _ds = np.timedelta64(1, "s")
+            time = datetime.fromtimestamp((time - _unix) / _ds, timezone.utc)
+
+        fs = s3fs.S3FileSystem(anon=True)
+        # Object store directory for given time
+        directory = f"hfsa/{time.year}{time.month:0>2}{time.day:0>2}/{time.hour:0>2}/"
+        s3_uri = f"s3://{cls.HAFS_BUCKET_NAME}/{directory}"
+
+        # List all files in the directory
+        try:
+            files = fs.ls(s3_uri, detail=False)
+        except (FileNotFoundError, Exception) as e:
+            logger.warning(f"Error listing files in directory {s3_uri}: {e}")
+            if return_file_names:
+                return [], []
+            return []
+
+        # Extract storm IDs from filenames
+        # Pattern: {storm_id}.YYYYMMDDHH.{model_id}.{domain}.{type}.f{lead_hour}.grb2
+        # Using a set to automatically remove duplicate storm IDs
+        storm_ids = set()
+        file_names = []
+
+        for file_path in files:
+            # Extract just the filename from the full path
+            filename = os.path.basename(file_path)
+            file_names.append(filename)
+
+            # Extract storm_id (part before first dot)
+            # Only process files that match the expected pattern
+            if "." in filename:
+                parts = filename.split(".")
+                if (
+                    len(parts) >= 5
+                ):  # Should have at least: storm_id, timestamp, model_id, domain, type, ...
+                    storm_id = parts[0]
+                    # Verify it matches expected pattern by checking structure
+                    # Expected: {storm_id}.YYYYMMDDHH.{model_id}.{domain}.{type}.f{lead_hour}.grb2
+                    if len(parts) >= 4 and parts[2] == model_id and parts[3] == domain:
+                        storm_ids.add(storm_id)
+
+        storm_ids_list = sorted(list(storm_ids))
+
+        if return_file_names:
+            return storm_ids_list, file_names
+        return storm_ids_list
