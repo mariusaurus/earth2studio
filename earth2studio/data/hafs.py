@@ -453,7 +453,11 @@ class HAFS:
                                 hours = int(lt / np.timedelta64(1, "h"))
                             else:
                                 hours = int(lt.total_seconds() // 3600)
-                            hafs_key = f"{variable_name}::{level}::{hours-1:d}-{hours:d} hour acc fcst"
+
+                            if hours == 0:
+                                hafs_key = f"{variable_name}::{level}::0-0 day acc fcst"
+                            else:
+                                hafs_key = f"{variable_name}::{level}::{hours-3:d}-{hours:d} hour acc fcst"
 
                     except KeyError as e:
                         logger.error(
