@@ -50,7 +50,7 @@ class HAFSLexicon(metaclass=LexiconType):
             "refc": "wrfsfc::REFC::entire atmosphere",
             "sp": "wrfsfc::PRES::surface",
             "mslp": "wrfsfc::PRMSL::mean sea level",
-            "tp": "wrfsfc::APCP::surface::x-x hour acc",  # 1 hour accumulated
+            "tp": "wrfsfc::APCP::surface::x-x hour acc",  # 3 hour accumulated
             "tcwv": "wrfsfc::PWAT::entire atmosphere (considered as a single layer)",
             "csnow": "wrfsfc::CSNOW::surface",
             "cicep": "wrfsfc::CICEP::surface",
