@@ -49,7 +49,7 @@ class HAFSLexicon(metaclass=LexiconType):
             "t2m": "wrfsfc::TMP::2 m above ground",
             "refc": "wrfsfc::REFC::entire atmosphere",
             "sp": "wrfsfc::PRES::surface",
-            "mslp": "wrfsfc::MSLMA::mean sea level",
+            "mslp": "wrfsfc::PRMSL::mean sea level",
             "tp": "wrfsfc::APCP::surface::x-x hour acc",  # 1 hour accumulated
             "tcwv": "wrfsfc::PWAT::entire atmosphere (considered as a single layer)",
             "csnow": "wrfsfc::CSNOW::surface",
