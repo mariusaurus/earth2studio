@@ -227,9 +227,6 @@ class HAFS:
                 f"Invalid domain '{self._domain}'. Must be 'parent' or 'storm'"
             )
 
-        if self._domain == "storm":
-            raise NotImplementedError("Storm domain is not yet implemented")
-
         if self._model_id not in ["hfsa", "hfsb"]:
             raise ValueError(
                 f"Invalid model ID '{self._model_id}'. Must be 'hfsa' or 'hfsb'"
@@ -418,7 +415,11 @@ class HAFS:
                         hafs_key = f"{variable_name}::{level}"
 
                         if variable_name in ["WIND"]:
-                            hours = int(lt.total_seconds() // 3600)
+                            # Convert numpy.timedelta64 to hours if needed
+                            if isinstance(lt, np.timedelta64):
+                                hours = int(lt / np.timedelta64(1, "h"))
+                            else:
+                                hours = int(lt.total_seconds() // 3600)
                             if hours == 0:
                                 hafs_key = f"{hafs_key}::0-0 day max fcst"
                             else:
@@ -428,17 +429,30 @@ class HAFS:
                         elif forecastvld:
                             hafs_key = f"{hafs_key}::{forecastvld}"
                         else:
-                            if lt.total_seconds() == 0:
+                            # Convert numpy.timedelta64 to seconds if needed
+                            if isinstance(lt, np.timedelta64):
+                                lt_seconds = lt / np.timedelta64(1, "s")
+                            else:
+                                lt_seconds = lt.total_seconds()
+                            if lt_seconds == 0:
                                 hafs_key = f"{hafs_key}::anl"
                             else:
-                                hafs_key = f"{hafs_key}::{int(lt.total_seconds() // 3600):d} hour fcst"
+                                if isinstance(lt, np.timedelta64):
+                                    hours = int(lt / np.timedelta64(1, "h"))
+                                else:
+                                    hours = int(lt.total_seconds() // 3600)
+                                hafs_key = f"{hafs_key}::{hours:d} hour fcst"
                         if index and index.isnumeric():
                             hafs_key = index
 
                         # Special cases
                         # could do this better with templates, but this is single instance
                         if variable_name == "APCP":
-                            hours = int(lt.total_seconds() // 3600)
+                            # Convert numpy.timedelta64 to hours if needed
+                            if isinstance(lt, np.timedelta64):
+                                hours = int(lt / np.timedelta64(1, "h"))
+                            else:
+                                hours = int(lt.total_seconds() // 3600)
                             hafs_key = f"{variable_name}::{level}::{hours-1:d}-{hours:d} hour acc fcst"
 
                     except KeyError as e:
@@ -732,7 +746,11 @@ class HAFS:
             _ds = np.timedelta64(1, "s")
             time = datetime.fromtimestamp((time - _unix) / _ds, timezone.utc)
 
-        lead_hour = int(lead_time.total_seconds() // 3600)
+        # Convert numpy.timedelta64 to hours if needed
+        if isinstance(lead_time, np.timedelta64):
+            lead_hour = int(lead_time / np.timedelta64(1, "h"))
+        else:
+            lead_hour = int(lead_time.total_seconds() // 3600)
         hafs_type = self._product_to_hafs_type(product)
         # HAFS structure: hfsa/YYYYMMDD/HH/{storm_id}.YYYYMMDDHH.{model_id}.{domain}.{type}.f{lead_hour}.grb2
         file_name = f"hfsa/{time.year}{time.month:0>2}{time.day:0>2}/{time.hour:0>2}/"
@@ -755,7 +773,11 @@ class HAFS:
             _ds = np.timedelta64(1, "s")
             time = datetime.fromtimestamp((time - _unix) / _ds, timezone.utc)
 
-        lead_hour = int(lead_time.total_seconds() // 3600)
+        # Convert numpy.timedelta64 to hours if needed
+        if isinstance(lead_time, np.timedelta64):
+            lead_hour = int(lead_time / np.timedelta64(1, "h"))
+        else:
+            lead_hour = int(lead_time.total_seconds() // 3600)
         hafs_type = self._product_to_hafs_type(product)
         # HAFS structure: hfsa/YYYYMMDD/HH/{storm_id}.YYYYMMDDHH.{model_id}.{domain}.{type}.f{lead_hour}.grb2.idx
         file_name = f"hfsa/{time.year}{time.month:0>2}{time.day:0>2}/{time.hour:0>2}/"
