@@ -40,8 +40,8 @@ class HAFSLexicon(metaclass=LexiconType):
     def build_vocab() -> dict[str, str]:
         """Create HAFS vocab dictionary"""
         sfc_variables = {
-            "fg10m": "wrfsfc::GUST::surface",  # CAUTION: different gust definitions: 10m vs surface, acc vs inst
-            "wind10m": "wrfsfc::WIND::10 m above ground",  # 1-minute averaged (?) maximum sustained winds at 10 meters above the surface
+            "fg10m": "wrfsfc::GUST::surface",  # CAUTION: different gust definitions: 10m vs surface, inst vs acc
+            "wind10m": "wrfsfc::WIND::10 m above ground",  # 1-minute averaged (?) maximum sustained winds at 10 meters above the surface over rev 1h period
             "u10m": "wrfsfc::UGRD::10 m above ground",
             "v10m": "wrfsfc::VGRD::10 m above ground",
             "u80m": "wrfsfc::UGRD::80 m above ground",

@@ -162,8 +162,8 @@ class HAFS:
         if domain not in ["parent", "storm", None]:
             raise ValueError(f"Invalid domain '{domain}'. Must be 'parent' or 'storm'")
 
-        if domain == "storm":
-            raise NotImplementedError("Storm domain is not yet implemented")
+        # if domain == "storm":
+        #     raise NotImplementedError("Storm domain is not yet implemented")
 
         self._domain = domain
         self._storm_id = storm_id
@@ -277,6 +277,127 @@ class HAFS:
         return xr_array
 
     async def fetch(
+        self,
+        time: datetime | list[datetime] | TimeArray,
+        lead_time: timedelta | list[timedelta] | LeadTimeArray,
+        variable: str | list[str] | VariableArray,
+    ) -> xr.DataArray:
+        """Async function to get data
+
+        Parameters
+        ----------
+        time : datetime | list[datetime] | TimeArray
+            Timestamps to return data for (UTC).
+        variable : str | list[str] | VariableArray
+            String, list of strings or array of strings that refer to variables to
+            return. Must be in the HAFS lexicon.
+
+        Returns
+        -------
+        xr.DataArray
+            HAFS weather data array
+        """
+        if self._domain == 'parent':
+            return await self.fetch_parent(time=time, lead_time=lead_time, variable=variable)
+        elif self._domain == 'storm':
+            return await self.fetch_storm(time=time, lead_time=lead_time, variable=variable)
+        else:
+            raise ValueError(f'domain {self.domain} not implemented.')
+
+    async def fetch_storm(
+        self,
+        time: datetime | list[datetime] | TimeArray,
+        lead_time: timedelta | list[timedelta] | LeadTimeArray,
+        variable: str | list[str] | VariableArray,
+    ) -> xr.DataArray:
+        """Async function to get data
+
+        Parameters
+        ----------
+        time : datetime | list[datetime] | TimeArray
+            Timestamps to return data for (UTC).
+        variable : str | list[str] | VariableArray
+            String, list of strings or array of strings that refer to variables to
+            return. Must be in the HAFS lexicon.
+
+        Returns
+        -------
+        xr.DataArray
+            HAFS weather data array
+        """
+        if self.fs is None:
+            raise ValueError(
+                "File store is not initialized! If you are calling this \
+            function directly make sure the data source is initialized inside the async \
+            loop!"
+            )
+
+        # time, variable = prep_data_inputs(time, variable)
+        time, lead_time, variable = prep_forecast_inputs(time, lead_time, variable)
+        # Create cache dir if doesnt exist
+        pathlib.Path(self.cache).mkdir(parents=True, exist_ok=True)
+
+        # Make sure input time is valid
+        self._validate_time(time)
+
+        # https://filesystem-spec.readthedocs.io/en/latest/async.html#using-from-async
+        if isinstance(self.fs, s3fs.S3FileSystem):
+            session = await self.fs.set_session()
+        else:
+            session = None
+
+        # Determine grid dimensions by fetching one variable first
+        # HAFS grid dimensions need to be read from the actual data
+        lat, lon = await self._determine_grid_size(time[0], lead_time[0])
+
+        # Note, this could be more memory efficient and avoid pre-allocation of the array
+        # but this is much much cleaner to deal with
+        xr_array = xr.DataArray(
+            data=np.zeros(
+                (
+                    len(time),
+                    len(lead_time),
+                    len(variable),
+                    len(lat),
+                    len(lon),
+                )
+            ),
+            dims=["time", "lead_time", "variable", "lat", "lon"],
+            coords={
+                "time": time,
+                "lead_time": lead_time,
+                "variable": variable,
+                "lat": lat,
+                "lon": lon,
+            },
+        )
+        if self._domain == 'storm':
+            xr_array.coords["lat_south"] = ("lead_time", np.zeros(len(lead_time)))
+            xr_array.coords["lon_west"] = ("lead_time", np.zeros(len(lead_time)))
+
+
+        async_tasks = []
+        async_tasks = await self._create_tasks(time, lead_time, variable)
+        func_map = map(
+            functools.partial(self.fetch_wrapper, xr_array=xr_array), async_tasks
+        )
+
+        await tqdm.gather(
+            *func_map, desc="Fetching HAFS data", disable=(not self._verbose)
+        )
+
+        # Delete cache if needed
+        if not self._cache:
+            shutil.rmtree(self.cache)
+
+        # Close aiohttp client if s3fs
+        if session:
+            await session.close()
+
+        return xr_array
+
+
+    async def fetch_parent(
         self,
         time: datetime | list[datetime] | TimeArray,
         lead_time: timedelta | list[timedelta] | LeadTimeArray,
@@ -643,11 +764,6 @@ class HAFS:
             lat = np.zeros((height, width))
             lon = np.zeros((height, width))
 
-        # # Ensure lat/lon are 2D arrays
-        # if lat.ndim != 2 or lon.ndim != 2:
-        #     lat = np.zeros((height, width))
-        #     lon = np.zeros((height, width))
-
         return lat, lon
 
     def _validate_time(self, times: list[datetime]) -> None:
@@ -798,47 +914,47 @@ class HAFS:
             cache_location = os.path.join(cache_location, "tmp_hafs")
         return cache_location
 
-    @classmethod
-    def grid(cls) -> tuple[np.array, np.array]:
-        """Generates the HAFS lambert conformal projection grid coordinates. Creates the
-        HAFS grid using single parallel lambert conformal mapping
+    # @classmethod
+    # def grid(cls) -> tuple[np.array, np.array]:
+    #     """Generates the HAFS lambert conformal projection grid coordinates. Creates the
+    #     HAFS grid using single parallel lambert conformal mapping
 
-        Note
-        ----
-        HAFS uses a similar grid structure to HRRR. Grid parameters may need adjustment
-        based on actual HAFS grid specifications.
+    #     Note
+    #     ----
+    #     HAFS uses a similar grid structure to HRRR. Grid parameters may need adjustment
+    #     based on actual HAFS grid specifications.
 
-        Returns
-        -------
-        Returns:
-            tuple: (lat, lon) in degrees
-        """
-        # a, b is radius of globe 6371229
-        p1 = pyproj.CRS(
-            "proj=lcc lon_0=262.5 lat_0=38.5 lat_1=38.5 lat_2=38.5 a=6371229 b=6371229"
-        )
-        p2 = pyproj.CRS("latlon")
-        transformer = pyproj.Transformer.from_proj(p2, p1)
-        itransformer = pyproj.Transformer.from_proj(p1, p2)
+    #     Returns
+    #     -------
+    #     Returns:
+    #         tuple: (lat, lon) in degrees
+    #     """
+    #     # a, b is radius of globe 6371229
+    #     p1 = pyproj.CRS(
+    #         "proj=lcc lon_0=262.5 lat_0=38.5 lat_1=38.5 lat_2=38.5 a=6371229 b=6371229"
+    #     )
+    #     p2 = pyproj.CRS("latlon")
+    #     transformer = pyproj.Transformer.from_proj(p2, p1)
+    #     itransformer = pyproj.Transformer.from_proj(p1, p2)
 
-        # Start with getting grid bounds based on lat / lon box (SW-NW-NE-SE)
-        # Reference seems a bit incorrect from the actual data, grabbed from S3 HRRR gribs
-        # Perhaps cell points? IDK
-        lat = np.array(
-            [21.138123, 47.83862349881542, 47.84219502248866, 21.140546625419148]
-        )
-        lon = np.array(
-            [237.280472, 225.90452026573686, 299.0828072281622, 287.71028150897075]
-        )
+    #     # Start with getting grid bounds based on lat / lon box (SW-NW-NE-SE)
+    #     # Reference seems a bit incorrect from the actual data, grabbed from S3 HRRR gribs
+    #     # Perhaps cell points? IDK
+    #     lat = np.array(
+    #         [21.138123, 47.83862349881542, 47.84219502248866, 21.140546625419148]
+    #     )
+    #     lon = np.array(
+    #         [237.280472, 225.90452026573686, 299.0828072281622, 287.71028150897075]
+    #     )
 
-        easting, northing = transformer.transform(lat, lon)
-        E, N = np.meshgrid(
-            np.linspace(easting[0], easting[2], 1799),
-            np.linspace(northing[0], northing[1], 1059),
-        )
-        lat, lon = itransformer.transform(E, N)
-        lon = np.where(lon < 0, lon + 360, lon)
-        return lat, lon
+    #     easting, northing = transformer.transform(lat, lon)
+    #     E, N = np.meshgrid(
+    #         np.linspace(easting[0], easting[2], 1799),
+    #         np.linspace(northing[0], northing[1], 1059),
+    #     )
+    #     lat, lon = itransformer.transform(E, N)
+    #     lon = np.where(lon < 0, lon + 360, lon)
+    #     return lat, lon
 
     @classmethod
     def available(
