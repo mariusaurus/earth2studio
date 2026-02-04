@@ -155,6 +155,11 @@ def prep_data_array(
         if dim in da.coords:
             out_coords[dim] = np.array(da.coords[dim])
 
+    # Include specific auxiliary coordinates for moving patches
+    for aux_coord in ["lat_south", "lon_west"]:
+        if aux_coord in da.coords and aux_coord not in out_coords:
+            out_coords[aux_coord] = np.array(da.coords[aux_coord])
+
     # Fetch data and regrid if necessary
     if interp_to is not None:
         if len(interp_to["_lat"].shape) != len(interp_to["_lon"].shape):

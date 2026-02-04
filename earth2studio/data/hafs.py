@@ -340,6 +340,9 @@ class HAFS:
         # Determine grid dimensions by fetching one variable first
         # HAFS grid dimensions need to be read from the actual data
         lat, lon = await self._determine_grid_size(time[0], lead_time[0])
+        if self._domain == 'storm':
+            lat = np.arange(0, .02*len(lat), .02)
+            lon = np.arange(0, .02*len(lon), .02)
 
         # Note, this could be more memory efficient and avoid pre-allocation of the array
         # but this is much much cleaner to deal with
