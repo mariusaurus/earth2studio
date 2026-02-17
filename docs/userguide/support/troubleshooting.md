@@ -61,13 +61,13 @@ ValueError: Invalid org. Choose from ['no-org', '0123456789']
 ValueError: Invalid team. Choose from ['no-team', '0123456789']
 ```
 
-In these cases it's typically because there is an NGC API key on the system either via
+In these cases it's typically because there is an NGC API key on the system either using
 the NGC config file located at `~/.ngc/config` by default or by environment variable
 `NGC_CLI_API_KEY`.
 
 One solution is to rename your config file or unset the API key environment variable so
 Earth2Studio uses guest access.
-Otherwise one can modify the config / environment variables to provide the needed
+Otherwise you can modify the config or environment variables to provide the needed
 information.
 For example:
 
@@ -87,11 +87,14 @@ a known issue with the library with several [issues](https://github.com/Dao-AILa
 on the subject.
 There are a few options to try outside of just waiting for the build to complete.
 
-1. If using a docker container is possible, the PyTorch docker container on NGC has
+1. Install a prebuilt flash attention wheel, either from the official repo or other
+  contributor projects like [flashattn.dev](https://flashattn.dev/#finder).
+
+2. If you are using a Docker container is possible, the PyTorch Docker container on NGC has
   flash attention already built inside of it. See {ref}`pytorch_container_environment`
   for details on how to install Earth2Studio inside a container.
 
-2. Speed up the compile time by increasing the number of jobs used during the build
+3. Speed up the compile time by increasing the number of jobs used during the build
   process. The upper limit depends on the systems memory, too large may result in
   a crash:
 
@@ -100,32 +103,10 @@ There are a few options to try outside of just waiting for the build to complete
     export MAX_JOBS=8
     ```
 
-3. Disable unused features in the library not needed for inference:
-
-    ```bash
-    # https://github.com/Dao-AILab/flash-attention/issues/1486
-    export FLASH_ATTENTION_DISABLE_HDIM128=FALSE
-    export FLASH_ATTENTION_DISABLE_CLUSTER=FALSE
-    export FLASH_ATTENTION_DISABLE_BACKWARD=TRUE
-    export FLASH_ATTENTION_DISABLE_SPLIT=TRUE
-    export FLASH_ATTENTION_DISABLE_LOCAL=TRUE
-    export FLASH_ATTENTION_DISABLE_PAGEDKV=TRUE
-    export FLASH_ATTENTION_DISABLE_FP16=TRUE
-    export FLASH_ATTENTION_DISABLE_FP8=TRUE
-    export FLASH_ATTENTION_DISABLE_APPENDKV=TRUE
-    export FLASH_ATTENTION_DISABLE_VARLEN=TRUE
-    export FLASH_ATTENTION_DISABLE_PACKGQA=TRUE
-    export FLASH_ATTENTION_DISABLE_SOFTCAP=TRUE
-    export FLASH_ATTENTION_DISABLE_HDIM64=TRUE
-    export FLASH_ATTENTION_DISABLE_HDIM96=TRUE
-    export FLASH_ATTENTION_DISABLE_HDIM192=TRUE
-    export FLASH_ATTENTION_DISABLE_HDIM256=TRUE
-    ```
-
 ## Earth2Grid or TorchHarmonics Build Failure `Python.h: No such file or directory`
 
 [Earth2Grid](https://github.com/NVlabs/earth2grid) and [TorchHarmonics](https://github.com/NVIDIA/torch-harmonics)
-sometimes need to be installed from source and built on the users machine.
+sometimes need to be installed from source and built on your machine.
 This requires the installation of the Python 3 developer tools.
 Without it the following error will occur on attempted install:
 
@@ -137,7 +118,7 @@ compilation terminated.
 ninja: build stopped: subcommand failed.
 ```
 
-To build this dependency, the Python developer library is needed, on debian systems this
+To build this dependency, the Python developer library is needed, on Debian systems this
 can be installed with:
 
 ```bash
@@ -146,7 +127,7 @@ sudo apt-get install python3-dev
 
 ## Torch Harmonics has long build time for FCNv3
 
-This is a known challenge when building torch harmonics with cuda extensions which
+This is a known challenge when building torch harmonics with cuda extensions, which
 require the compilation of discrete-continuous (DISCO) convolutions.
 One method to speed up the install process is to limit the [cuda architectures](https://developer.nvidia.com/cuda-gpus)
 that are built to the specific card being used.
@@ -175,7 +156,7 @@ Some packages that need to get built from source like dm-tree or natten require 
 additional build tools on the system.
 This error indicates that the system needs [cmake](https://cmake.org/download/)
 installed.
-For debian systems this can be done through APT:
+For Debian systems this can be done through APT:
 
 ```bash
 apt install cmake
@@ -183,11 +164,11 @@ apt install cmake
 
 ## RuntimeError: Cannot find the ecCodes library
 
-This can surface when using a data source (e.g. CDS, GFS, HRRR, etc) that needs to
+This can surface when using a data source (including: CDS, GFS, HRRR) that needs to
 read grib files indicating that ECMWF's eccodes library needs to be installed.
 Eccodes has several [install methods](https://github.com/ecmwf/eccodes), provided on
 [conda forge](https://anaconda.org/channels/conda-forge/packages/eccodes/overview) and
-APT for debian based systems:
+APT for Debian based systems:
 
 ```bash
 apt-get install -y --no-install-recommends libeccodes-tools libeccodes-dev
