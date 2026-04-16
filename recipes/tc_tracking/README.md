@@ -43,13 +43,12 @@ process.
    - [2.1 Generate Ensemble](#21-generate-ensemble)
    - [2.2 Reproduce Individual Ensemble Members](#22-reproduce-individual-ensemble-members)
    - [2.3 Extract Reference Tracks from ERA5](#23-extract-reference-tracks-from-era5)
-3. [Visualisation](#3-visualisation) *(coming soon)*
+3. [Visualisation](#3-visualisation)
 4. [TempestExtremes Integration](#4-tempestextremes-integration)
 5. [Example Workflow](#5-example-workflow)
    - [5.1 Extract Baseline](#51-extract-baseline-optional)
    - [5.2 Produce Ensemble Forecasts](#52-produce-ensemble-forecasts)
    - [5.3 Analyse Tracks](#53-analyse-tracks)
-     *(coming soon)*
    - [5.4 Reproduce Interesting Members](#54-reproduce-interesting-members-to-extract-fields)
 
 ## 1. Setting up the Environment
@@ -153,14 +152,14 @@ The pipeline has three operational modes:
 
 - **`generate_ensemble`**: Generate an ensemble prediction
   and extract tropical cyclones.
-- **`reproduce_members`**: Reproduce
-  individual ensemble members to store atmospheric fields
-  of interesting tracks. Note: Currently only works with
-  FCN3, as AIFS-ENS does not expose a method to set the
-  model's internal random state.
-- **`extract_baseline`**: Extract tropical
-  cyclone tracks from historical reanalysis data (e.g. ERA5)
-  for validation purposes.
+- **`reproduce_members`**: Reproduce individual ensemble
+  members to store atmospheric fields of interesting tracks.
+  Note: Currently only works with FCN3, as AIFS-ENS does
+  not expose a method to set the model's internal random
+  state.
+- **`extract_baseline`**: Extract tropical cyclone tracks
+  from historical reanalysis data (e.g. ERA5) for validation
+  purposes.
 
 In the following we will explain how to configure the yaml
 files for those three modes. You can find example configs
@@ -277,9 +276,10 @@ cyclone_tracking:
     # path to orography data; local NC file or URL
     # (only needed if height is used)
     orography_path: https://huggingface.co/nvidia/fourcastnet3/blob/main/orography.nc
-    # --- optional (shown with defaults) ---
-    keep_raw_data: False        # keep raw field data used for tracking
-    scratch_dir: null           # scratch directory for intermediate files (null = auto-detect /dev/shm, fall back to disk)
+    # keep raw field data used for tracking
+    keep_raw_data: False
+    # scratch directory for intermediate files (null = auto-detect /dev/shm, fall back to disk)
+    scratch_dir: null
     task_timeout_seconds: 120   # timeout for tracking tasks
     print_te_output: False      # print TE output to terminal
     max_workers_per_rank: 8     # max concurrent TE subprocesses per rank
@@ -476,16 +476,18 @@ each named storm.
 
 **IBTrACS Data:**
 
-The pipeline requires the IBTrACS dataset in CSV format.
-Specify a local path in the configuration:
+Download the IBTrACS data in CSV format:
 
-```yaml
-ibtracs_source_data: "./aux_data/ibtracs.ALL.list.v04r01.csv"
+<!-- markdownlint-disable MD013 -->
+
+```bash
+wget https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv
 ```
 
-If the file does not exist at the configured path, it is
-downloaded automatically from NCEI (~300 MB). The download
-only occurs once; subsequent runs use the cached file.
+<!-- markdownlint-enable MD013 -->
+
+Note: This file is over 300MB and may take several minutes
+to download.
 
 **Reanalysis Data:**
 
@@ -502,7 +504,7 @@ only occurs once; subsequent runs use the cached file.
 
 ```yaml
 store_dir: "./outputs_${project}"
-ibtracs_source_data: "./aux_data/ibtracs.ALL.list.v04r01.csv"
+ibtracs_source_data: "/path/to/ibtracs.ALL.list.v04r01.csv"
 
 data_source:
     era5_train:
@@ -518,13 +520,6 @@ data_source:
 
 ## 3. Visualisation
 
-> [!Note]
-> Visualisation tools will be available in a future update.
-
-<!-- markdownlint-disable MD033 -->
-<details>
-<summary>Preview</summary>
-
 Two Jupyter notebooks are provided in `./plotting` for
 analysing and visualising tropical cyclone tracking results:
 
@@ -538,9 +533,6 @@ analysing and visualising tropical cyclone tracking results:
 - **`plot_tracks_n_fields.ipynb`**: Create animated
   visualisations of storm tracks overlaid on atmospheric
   field data.
-
-</details>
-<!-- markdownlint-enable MD033 -->
 
 ## 4. TempestExtremes Integration
 
@@ -622,10 +614,10 @@ comparison with forecast predictions. Note that downloading
 the ERA5 field data for Hato and Helene is required and can
 take some time. If it takes too long, you can skip this step
 and use the pre-computed reference tracks provided in
-`./aux_data` instead.
+`./test/aux_data` instead.
 
-The IBTrACS data file is downloaded automatically on first
-use. Extract the baseline tracks:
+First, download the IBTrACS data, then extract the baseline
+tracks:
 
 ```bash
 python tc_hunt.py --config-name=extract_era5.yaml
@@ -654,13 +646,6 @@ trajectories.
 
 ### 5.3 Analyse Tracks
 
-> [!Note]
-> Visualisation tools will be available in a future update.
-
-<!-- markdownlint-disable MD033 -->
-<details>
-<summary>Preview</summary>
-
 Visualise the results using the notebook
 `plotting/tracks_slayground.ipynb`.
 
@@ -684,9 +669,6 @@ tru_track_dir = '/path/to/outputs_reference_tracks'
 # If you skipped baseline extraction, use:
 # tru_track_dir = '/path/to/test/aux_data'
 ```
-
-</details>
-<!-- markdownlint-enable MD033 -->
 
 ### 5.4 Reproduce Interesting Members to Extract Fields
 
