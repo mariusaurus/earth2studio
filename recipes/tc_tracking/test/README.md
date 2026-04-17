@@ -28,7 +28,7 @@ This pattern provides information about initial condition, ensemble member ID
 and batch size.
 
 Next, check if the random seeds for members three and four provided in
-`cfg/reproduce_helene.yaml` are identical to the seeds in the csv file names.
+`test/cfg/reproduce_helene.yaml` are identical to the seeds in the csv file names.
 If not, replace the seeds for both members in the yaml file with the seeds
 from the csv file names.
 

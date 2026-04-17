@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `JPSSATMSLexicon` for ATMS variable mappings
 - Added JPSS CrIS FSR Level 1 spectral radiance data source (`JPSS_CRIS`)
 - Added `JPSSCrISLexicon` for CrIS FSR variable mappings
+- Added Tropical Cyclone tracking recipe with Tempest Extremes integration
 
 ### Changed
 
