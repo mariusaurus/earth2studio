@@ -10,10 +10,15 @@ install-docker:
 
 .PHONY: setup-ci
 setup-ci:
-	uv venv --python=3.12
+	uv venv --python=3.13
 	uv sync
 	uv run pre-commit install --install-hooks
 	uv tool install tox --with tox-uv
+	uv sync --extra all
+	uv sync --extra aifs
+	uv sync --extra aifs2
+	uv sync --extra aifs2ens
+	uv sync --extra aifsens
 
 .PHONY: format
 format:
@@ -45,21 +50,23 @@ license:
 
 .PHONY: pytest
 pytest:
-	uvx tox -c tox-min.ini run
+	@test -n "$(TOX_ENV)" || (echo "TOX_ENV is required! Usage: make pytest TOX_ENV=<env>" && exit 1)
+	uvx tox -c tox.ini run -e $(TOX_ENV)
 
 .PHONY: pytest-full
 pytest-full:
-	uvx tox -c tox.ini run -- -s --cov --cov-append --slow --package --testmon-noselect
+	uvx tox -c tox.ini run -- --cov --cov-append --slow --package --testmon-noselect
 
 # Select which pytest target to run in CI based on environment
 ifneq (,$(filter 1 true TRUE True yes YES on ON,$(CI_PYTEST_ALL)))
 PYTEST_CI_TARGET := pytest-full
 else
-PYTEST_CI_TARGET := pytest
+PYTEST_CI_TARGET := pytest TOX_ENV=$(TOX_ENV)
 endif
 
 .PHONY: pytest-ci
 pytest-ci:
+	uv run python test/_ci/check_gpu.py || exit $?
 	$(MAKE) $(PYTEST_CI_TARGET)
 
 .PHONY: coverage
@@ -90,6 +97,19 @@ docs-build-examples:
 
 .PHONY: docs-dev
 docs-dev:
-	# rm -rf examples/outputs
-	uv sync --extra all --group docs
+	@echo "Make sure you synced your uv environment with needed extras and --group docs..."
 	PLOT_GALLERY=True RUN_STALE_EXAMPLES=True FILENAME_PATTERN=$(FILENAME) uv run $(MAKE) -j 4 -C docs html
+
+PORT ?= 8001
+.PHONY: serve
+docs-serve:
+	uv run python -m http.server $(PORT) --cgi --directory docs/_build/html
+
+.PHONY: container-service
+# Example DOCKER_REPO?=nvcr.io/dycvht5ows21
+E2S_RELEASE_TAG?=0.15.0
+E2S_IMAGE_NAME=$(DOCKER_REPO)/earth2studio-scicomp
+E2S_IMAGE_TAG=v$(E2S_RELEASE_TAG).20260514.0
+container-service:
+	@test -n "$(DOCKER_REPO)" || (echo "DOCKER_REPO is not set!" && exit 1)
+	DOCKER_BUILDKIT=1 docker build -t $(E2S_IMAGE_NAME):$(E2S_IMAGE_TAG) -f serve/Dockerfile .

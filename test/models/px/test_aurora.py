@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -20,7 +20,11 @@ from collections.abc import Iterable
 import numpy as np
 import pytest
 import torch
-from aurora import Batch, Metadata
+
+try:
+    from aurora import Batch, Metadata
+except ImportError:
+    pytest.importorskip("aurora")
 
 from earth2studio.data import Random, fetch_data
 from earth2studio.models.px import Aurora

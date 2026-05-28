@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -129,6 +129,11 @@ class CBottleSR(torch.nn.Module, AutoModelMixin):
         Maximum noise level for diffusion process, by default 800
     seed : int, optional
         Random generator seed for latent variables, by default None
+
+    Badges
+    ------
+    region:global class:ds product:wind product:precip product:temp product:atmos
+    year:2025 gpu:80gb
     """
 
     def __init__(
@@ -369,7 +374,7 @@ class CBottleSR(torch.nn.Module, AutoModelMixin):
     def load_default_package(cls) -> Package:
         """Default pre-trained cBottle model package from Nvidia model registry"""
         return Package(
-            "ngc://models/nvidia/earth-2/cbottle@1.2",
+            "hf://nvidia/cbottle@eebd93c85b3cd3a5a8f79c546ed917b0b80438f4",
             cache_options={
                 "cache_storage": Package.default_cache("cbottle"),
                 "same_names": True,
@@ -388,7 +393,6 @@ class CBottleSR(torch.nn.Module, AutoModelMixin):
         sigma_max: int = 800,
         seed: int | None = None,
         distilled_model: bool = False,
-        device: str = "cpu",
     ) -> DiagnosticModel:
         """Load diagnostic model from package
 
@@ -413,14 +417,18 @@ class CBottleSR(torch.nn.Module, AutoModelMixin):
         distilled_model : bool, optional
             Whether to use the distilled model, If True, the distilled helper is used,
             enabling generation with fewer sampler steps, by default False
-        device : str
-            Device to load model onto, by default cpu
 
         Returns
         -------
         DiagnosticModel
             Diagnostic model
         """
+
+        try:
+            package.resolve("config.json")  # HF tracking download statistics
+        except FileNotFoundError:
+            pass
+
         checkpoint_name = (
             "cBottle-SR-Distill.zip" if distilled_model else "cBottle-SR.zip"
         )
@@ -431,10 +439,10 @@ class CBottleSR(torch.nn.Module, AutoModelMixin):
 
         if distilled_model:
             sr_model = model_cls.from_pretrained(
-                state_path, window_function="KBD", window_alpha=1.0, device=device
+                state_path, window_function="KBD", window_alpha=1.0
             )
         else:
-            sr_model = model_cls.from_pretrained(state_path, device=device)
+            sr_model = model_cls.from_pretrained(state_path)
 
         return cls(
             sr_model,

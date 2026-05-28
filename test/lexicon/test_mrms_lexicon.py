@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -23,6 +23,15 @@ from earth2studio.lexicon.mrms import MRMSLexicon
 def test_mrms_lexicon_basic_mapping_and_modifier_identity():
     key, mod = MRMSLexicon.get_item("refc")
     assert key == "MergedReflectivityQCComposite_00.50"
+
+    x = np.array([0.0, 1.5, -3.2], dtype=np.float32)
+    y = mod(x.copy())
+    assert np.array_equal(y, x)
+
+
+def test_mrms_lexicon_refc_base_mapping_and_modifier_identity():
+    key, mod = MRMSLexicon.get_item("refc_base")
+    assert key == "MergedBaseReflectivityQC_00.50"
 
     x = np.array([0.0, 1.5, -3.2], dtype=np.float32)
     y = mod(x.copy())

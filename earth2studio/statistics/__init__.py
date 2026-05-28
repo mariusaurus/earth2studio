@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -18,6 +18,7 @@ from .acc import acc
 from .base import Metric, Statistic
 from .brier import brier_score
 from .crps import crps
+from .energy_score import energy_score
 from .fss import fss
 from .lsd import log_spectral_distance
 from .moments import mean, std, variance  # noqa

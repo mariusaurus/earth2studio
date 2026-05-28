@@ -15,7 +15,9 @@ model installs and suggested environment set up for the most complete experience
 
 ## Install using Pip
 
-To get the latest release of Earth2Studio, install from the Python index:
+Earth2Studio runs on [PyTorch](https://pytorch.org/get-started/locally/); **make sure it
+is installed correctly for your system first**.
+To get the latest release of Earth2Studio, install from the Python index.
 
 ```bash
 pip install earth2studio
@@ -28,8 +30,8 @@ and it's recommended that users use an uv project for the best install experienc
 
 ```bash
 mkdir earth2studio-project && cd earth2studio-project
-uv init --python=3.12
-uv add "earth2studio @ git+https://github.com/NVIDIA/earth2studio.git@0.11.0"
+uv init --python=3.13
+uv add "earth2studio @ git+https://github.com/NVIDIA/earth2studio.git@0.15.0"
 ```
 
 :::{dropdown} uv Install
@@ -153,6 +155,52 @@ uv add earth2studio --extra aifsens
 :::
 ::::
 :::::
+:::::{tab-item} AIFS2
+Notes: This model depends on
+[flash-attention](https://github.com/Dao-AILab/flash-attention), which can take a long
+time to compile. See the [troubleshooting docs](https://nvidia.github.io/earth2studio/userguide/support/troubleshooting.html)
+for compilation tips.
+
+::::{tab-set}
+:::{tab-item} pip
+
+```bash
+pip install earth2studio[aifs2] --no-build-isolation
+```
+
+:::
+:::{tab-item} uv
+
+```bash
+uv add earth2studio --extra aifs2
+```
+
+:::
+::::
+:::::
+:::::{tab-item} AIFS2 Ensemble
+Notes: This model depends on
+[flash-attention](https://github.com/Dao-AILab/flash-attention), which can take a long
+time to compile. See the [troubleshooting docs](https://nvidia.github.io/earth2studio/userguide/support/troubleshooting.html)
+for compilation tips.
+
+::::{tab-set}
+:::{tab-item} pip
+
+```bash
+pip install earth2studio[aifs2ens] --no-build-isolation
+```
+
+:::
+:::{tab-item} uv
+
+```bash
+uv add earth2studio --extra aifs2ens
+```
+
+:::
+::::
+:::::
 :::::{tab-item} Atlas
 Notes: The Atlas model depends on [natten](https://github.com/SHI-Labs/NATTEN), which
 can take a long time to compile.
@@ -161,6 +209,7 @@ can take a long time to compile.
 :::{tab-item} pip
 
 ```bash
+pip install --no-build-isolation "torch-harmonics @ git+https://github.com/NVIDIA/torch-harmonics.git@a632ca748a12bd9f74dbc1e00653317810991f74"
 pip install earth2studio[atlas]
 ```
 
@@ -221,7 +270,7 @@ be installed manually for pip users.
 :::{tab-item} pip
 
 ```bash
-pip install --no-build-isolation "earth2grid @ git+https://github.com/NVlabs/earth2grid@fbbfe29b0a8bebb85a43c7027288d9f294b435cc"
+pip install --no-build-isolation "earth2grid @ git+https://github.com/NVlabs/earth2grid@11dcf1b0787a7eb6a8497a3a5a5e1fdcc31232d3"
 pip install earth2studio[dlesym]
 ```
 
@@ -265,8 +314,8 @@ for known suggestions/fixes related to this install process.
 
 ```bash
 export FORCE_CUDA_EXTENSION=1
-pip install --no-build-isolation torch-harmonics==0.8.0
-pip install "makani @ git+https://github.com/NVIDIA/modulus-makani.git@28f38e3e929ed1303476518552c64673bbd6f722"
+pip install --no-build-isolation "torch-harmonics @ git+https://github.com/NVIDIA/torch-harmonics.git@a632ca748a12bd9f74dbc1e00653317810991f74"
+pip install "makani @ git+https://github.com/NVIDIA/makani.git@b38fcb2799d7dbc146fa60459f3f9823394a8bf1"
 pip install earth2studio[fcn3]
 ```
 
@@ -275,7 +324,6 @@ pip install earth2studio[fcn3]
 
 ```bash
 export FORCE_CUDA_EXTENSION=1
-uv add torch-harmonics==0.8.0 --no-build-isolation
 uv add earth2studio --extra fcn3
 ```
 
@@ -283,8 +331,8 @@ uv add earth2studio --extra fcn3
 ::::
 :::::
 :::::{tab-item} FengWu
-Notes: Requires [ONNX GPU Runtime](https://onnxruntime.ai/docs/install/). May need
-manual install depending on CUDA and Python version.
+Notes: Requires [ONNX GPU Runtime](https://onnxruntime.ai/docs/install/#python-installs).
+This might have specific pip installation steps depending on your CUDA version.
 
 ::::{tab-set}
 :::{tab-item} pip
@@ -304,8 +352,8 @@ uv add earth2studio --extra fengwu
 ::::
 :::::
 :::::{tab-item} FuXi
-Notes: Requires [ONNX GPU Runtime](https://onnxruntime.ai/docs/install/). May need
-manual install depending on CUDA version.
+Notes: Requires [ONNX GPU Runtime](https://onnxruntime.ai/docs/install/#python-installs).
+This might have specific pip installation steps depending on your CUDA version.
 
 ::::{tab-set}
 :::{tab-item} pip
@@ -345,8 +393,8 @@ uv add earth2studio --extra graphcast
 ::::
 :::::
 :::::{tab-item} Pangu
-Notes: Requires [ONNX GPU Runtime](https://onnxruntime.ai/docs/install/). May need
-manual install depending on CUDA version.
+Notes: Requires [ONNX GPU Runtime](https://onnxruntime.ai/docs/install/#python-installs).
+This might have specific pip installation steps depending on your CUDA version.
 
 ::::{tab-set}
 :::{tab-item} pip
@@ -366,14 +414,15 @@ uv add earth2studio --extra pangu
 ::::
 :::::
 :::::{tab-item} SFNO
-Notes: Requires [Modulus-Makani](https://github.com/NVIDIA/modulus-makani) to be
+Notes: Requires [Makani](https://github.com/NVIDIA/makani) to be
 installed manually.
 
 ::::{tab-set}
 :::{tab-item} pip
 
 ```bash
-pip install "makani @ git+https://github.com/NVIDIA/modulus-makani.git@28f38e3e929ed1303476518552c64673bbd6f722"
+pip install --no-build-isolation "torch-harmonics @ git+https://github.com/NVIDIA/torch-harmonics.git@a632ca748a12bd9f74dbc1e00653317810991f74"
+pip install "makani @ git+https://github.com/NVIDIA/makani.git@b38fcb2799d7dbc146fa60459f3f9823394a8bf1"
 pip install earth2studio[sfno]
 ```
 
@@ -414,7 +463,7 @@ needs to be installed manually for pip users.
 :::{tab-item} pip
 
 ```bash
-pip install --no-build-isolation "earth2grid @ git+https://github.com/NVlabs/earth2grid@fbbfe29b0a8bebb85a43c7027288d9f294b435cc"
+pip install --no-build-isolation "earth2grid @ git+https://github.com/NVlabs/earth2grid@11dcf1b0787a7eb6a8497a3a5a5e1fdcc31232d3"
 pip install earth2studio[stormscope]
 ```
 
@@ -462,8 +511,8 @@ prognostic, CBottleInfill diagnostic and CBottleSR diagnostic.
 
 ```bash
 pip install hatchling
-pip install --no-build-isolation "earth2grid @ git+https://github.com/NVlabs/earth2grid@fbbfe29b0a8bebb85a43c7027288d9f294b435cc"
-pip install --no-build-isolation "cbottle @ git+https://github.com/NickGeneva/cBottle.git@9250793894f8a9963f6968d62112884869fde3e1"
+pip install --no-build-isolation "earth2grid @ git+https://github.com/NVlabs/earth2grid@11dcf1b0787a7eb6a8497a3a5a5e1fdcc31232d3"
+pip install --no-build-isolation "cbottle @ git+https://github.com/NVlabs/cBottle.git@8b8b358466e6b2f50d1779009790002ceb596e72"
 pip install earth2studio[cbottle]
 ```
 
@@ -519,8 +568,7 @@ uv add earth2studio --extra corrdiff
 ::::
 :::::
 :::::{tab-item} Cyclone Trackers
-Notes: Additional dependencies for all cyclone tracking models. Only Python 3.12 and
-below support.
+Notes: Additional dependencies for cyclone tracking models `TCTrackerVitart` and `TCTrackerWuDuan`.
 
 ::::{tab-set}
 :::{tab-item} uv
@@ -535,6 +583,23 @@ uv pip install earth2studio --extra cyclone
 ```bash
 pip install earth2studio[cyclone]
 ```
+
+`TempestExtremes` is not provided as a Python library and must be installed
+separately by the user. Installation instructions can be found on the
+[TempestExtremes GitHub page](https://github.com/ClimateGlobalChange/tempestextremes?tab=readme-ov-file#installation-via-cmake-recommended).
+
+When compiling `TempestExtremes` via CMake, executables are placed in a `bin`
+directory inside the `TempestExtremes` source tree by default (i.e.
+`/path/to/tempestextremes/bin`). Because these binaries are not
+automatically added to the system `PATH`, the `detect_cmd` and `stitch_cmd`
+entries in the pipeline configuration must reference the full path to the
+`DetectNodes` and `StitchNodes` executables, e.g.
+`/path/to/tempestextremes/bin/DetectNodes ...`. When using the provided
+Docker container, the binaries are copied to `/usr/local/bin` and are therefore
+available on the `PATH`; in that case only the executable names are needed
+(e.g. `DetectNodes ...`). Examples for both commands are provided in the
+docstring of the `TempestExtremes` class and in the
+[TC tracking recipe](../../recipes/tc_tracking/README.md).
 
 :::
 ::::
@@ -639,6 +704,83 @@ uv add earth2studio --extra windgust-afno
 :::::
 ::::::
 
+#### Data Assimilation
+
+:::{admonition} Warning
+:class: warning
+
+Data assimilation model APIs are currently **in Beta** and may change in future
+releases. Expect possible breaking changes as these APIs mature.
+:::
+
+:::{admonition} Warning
+:class: warning
+
+All data assimilation models require [CuPy](https://docs.cupy.dev/en/stable/) and [cuDF](https://docs.rapids.ai/api/cudf/stable/),
+which are CUDA-dependent libraries.
+The default installation uses CUDA 12 (i.e., `cupy-cuda12x`, `cudf-cu12`).
+If your system uses a different CUDA version, you may need to adjust the dependencies.
+:::
+
+::::::{tab-set}
+:::::{tab-item} HealDA
+::::{tab-set}
+:::{tab-item} pip
+
+```bash
+pip install hatchling
+pip install --no-build-isolation "earth2grid @ git+https://github.com/NVlabs/earth2grid@11dcf1b0787a7eb6a8497a3a5a5e1fdcc31232d3"
+pip install earth2studio[da-healda]
+```
+
+:::
+:::{tab-item} uv
+
+```bash
+uv add earth2studio --extra da-healda
+```
+
+:::
+::::
+:::::
+:::::{tab-item} InterpEquirectangular
+::::{tab-set}
+:::{tab-item} pip
+
+```bash
+pip install earth2studio[da-interp]
+```
+
+:::
+:::{tab-item} uv
+
+```bash
+uv add earth2studio --extra da-interp
+```
+
+:::
+::::
+:::::
+:::::{tab-item} StormCast SDA
+::::{tab-set}
+:::{tab-item} pip
+
+```bash
+pip install earth2studio[da-stormcast]
+```
+
+:::
+:::{tab-item} uv
+
+```bash
+uv add earth2studio --extra da-stormcast
+```
+
+:::
+::::
+:::::
+::::::
+
 ### Submodule Dependencies
 
 A few features in various submodules require some specific dependencies that have been
@@ -732,7 +874,7 @@ For the best experience, we recommend creating a fresh environment whether that 
 uv, a Docker container or even a Conda environment.
 Below are some recipes for creating a handful of environments for setting up
 Earth2Studio in an isolated environment.
-For developer environments, please refer to the {ref}`developer_overview`.
+For developer environments, refer to the {ref}`developer_overview`.
 
 ## uv Project
 
@@ -742,35 +884,38 @@ the following commands:
 
 ```bash
 mkdir earth2studio-project && cd earth2studio-project
-uv init --python=3.12
-uv add "earth2studio @ git+https://github.com/NVIDIA/earth2studio.git@0.11.0"
+uv init --python=3.13
+uv add "earth2studio @ git+https://github.com/NVIDIA/earth2studio.git@0.15.0"
 ```
 
 or if you are already inside an existing uv project:
 
 ```bash
-uv venv --python=3.12
-uv add "earth2studio @ git+https://github.com/NVIDIA/earth2studio.git@0.11.0"
+uv venv --python=3.13
+uv add "earth2studio @ git+https://github.com/NVIDIA/earth2studio.git@0.15.0"
 ```
 
 (pytorch_container_environment)=
 
-## PyTorch Docker Container
+## Docker Container
 
-For a docker environment the [Nvidia PyTorch container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch)
-provides a good base with many dependencies already installed and optimized for NVIDIA
-hardware.
+For a docker environment, the recommended process is to still use `uv` help install
+packages for you.
+The [Nvidia PyTorch container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch)
+typically provides a good base with many dependencies already installed and optimized
+for NVIDIA hardware.
 In container instances, using a virtual environment is often [not necessary](https://docs.astral.sh/uv/pip/environments/#using-arbitrary-python-environments).
 It is recommended to use the following commands to install using the container's Python
 interpreter:
 
 ```bash
-docker run -it -t nvcr.io/nvidia/pytorch:25.05-py3
+docker run -it -t nvcr.io/nvidia/pytorch:26.04-py3
 
->>> apt-get update && apt-get install -y git make curl && rm -rf /var/lib/apt/lists/*
+>>> apt-get update && apt-get install -y git make curl cmake python3-dev \
+    libeccodes-tools libeccodes-dev
 >>> unset PIP_CONSTRAINT
 >>> curl -LsSf https://astral.sh/uv/install.sh | sh && source $HOME/.local/bin/env
->>> uv pip install --system --break-system-packages "earth2studio@git+https://github.com/NVIDIA/earth2studio.git@0.11.0"
+>>> uv pip install --system --break-system-packages "earth2studio@git+https://github.com/NVIDIA/earth2studio.git@0.15.0"
 ```
 
 <!-- markdownlint-disable MD013 -->
@@ -778,41 +923,26 @@ docker run -it -t nvcr.io/nvidia/pytorch:25.05-py3
 :class: note
 
 To add extra dependencies adjust the `uv pip install` command like you would normally
-do with pip e.g.
+do with pip, for example:
 
 ```bash
 uv pip install --system \
     --break-system-packages \
-    "earth2studio[all]@git+https://github.com/NVIDIA/earth2studio.git@0.11.0"
+    "earth2studio[aifs,data]@git+https://github.com/NVIDIA/earth2studio.git@0.15.0"
 ```
 
 :::
 
-<!-- markdownlint-enable MD013 -->
+:::{dropdown} Earth2Studio in Docker
+:color: warning
+:icon: alert-fill
+:animate: fade-in
 
-## Custom Container
-
-For a dedicated docker container the following can be used to get started.
-There is some complexity to undo the pip constraints from the PyTorch container, but
-otherwise the install process is the same.
-
-```dockerfile
-FROM nvcr.io/nvidia/pytorch:25.05-py3
-COPY --from=ghcr.io/astral-sh/uv:0.6.13 /uv /uvx /bin/
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    make \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-# Disable constraint files in the container
-ENV PIP_CONSTRAINT=
-# Install Earth2Studio and dependencies
-RUN uv pip install --system --break-system-packages "earth2studio@git+https://github.com/NVIDIA/earth2studio.git@0.11.0"
-```
+Some models and dependencies have specific system requirements (for example, CUDA
+versions) that may require a different container than the one listed here. If you are
+comfortable with Docker, refer to the [testing Dockerfile](https://github.com/NVIDIA/earth2studio/blob/main/test/Dockerfile)
+as a reference for building a general-purpose Earth2Studio image.
+:::
 
 ## Conda Environment
 
@@ -824,10 +954,10 @@ However this demonstrates that in principle Earth2Studio can be installed using 
 package tooling.
 
 ```bash
-conda create -n earth2studio python=3.12
+conda create -n earth2studio python=3.13
 conda activate earth2studio
 
-uv pip install --system --break-system-packages "earth2studio@git+https://github.com/NVIDIA/earth2studio.git@0.11.0"
+uv pip install --system --break-system-packages "earth2studio@git+https://github.com/NVIDIA/earth2studio.git@0.15.0"
 ```
 
 # System Recommendations
@@ -839,8 +969,8 @@ The following are recommended to closely match development and automation enviro
 minimizing the chance for unexpected incompatibilities:
 
 - OS: Ubuntu 24.04 LTS
-- Python Version: 3.12
-- CUDA Version: 12.8
+- Python Version: 3.13
+- CUDA Version: 13.0
 
 ## Hardware
 
@@ -871,8 +1001,13 @@ use case.
 Earth2Studio uses a few environment variables to configure various parts of the package.
 The important ones are:
 
-- `EARTH2STUDIO_CACHE`: The location of the cache used for Earth2Studio. This is a file
-path where things like models and cached data from data sources will be stored.
+- `EARTH2STUDIO_CACHE`: The general cache location used for Earth2Studio. This is a file
+path where things like models and cached data from data sources will be stored. Defaults to
+`~/.cache/earth2studio`.
+- `EARTH2STUDIO_DATA_CACHE`: The cache location specifically for data sources. If set,
+this overrides `EARTH2STUDIO_CACHE` for data source caching operations.
+- `EARTH2STUDIO_MODEL_CACHE`: The cache location specifically for model packages. If
+    set, this overrides `EARTH2STUDIO_CACHE` for model checkpoint caching operations.
 - `EARTH2STUDIO_PACKAGE_TIMEOUT`: The max number of seconds for a download operation of
 a model package file from a remote store such as NGC, Huggingface or S3.
 - `EARTH2STUDIO_DISABLE_MSC`: Can be used to disable use of the [multi-storage client](https://github.com/NVIDIA/multi-storage-client)

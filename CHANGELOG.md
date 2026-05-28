@@ -7,7 +7,162 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.12.0a0] - 2026-01-xx
+## [0.16.0a0] - xxxx-xx-xx
+
+### Added
+
+- Added AIFS 2.0 prognostic model (`AIFS2`) with wave and 10 hPa pressure level support
+- Added AIFS 2.0 ensemble prognostic model (`AIFS2ENS`) with stochastic noise injection
+- Added wave variables to IFS data source for AIFS2 support
+- Added NCEP CFSv2 operational forecast data sources for the pressure-level
+  `pgbf` and surface-flux `flxf` products (`CFS_FX`, `CFS_FX_Flux`), backed by
+  either NOMADS (real-time) or the AWS Open Data mirror (archive)
+- Added NCEP CFSv2 6-hourly 9-month reforecast data sources
+  (`CFS_Reforecast_FX`, `CFS_Reforecast_FX_Flux`), covering 1981-12-12
+  through 2011-03-27 with cycles every 5 days, served from the NCEI HTTPS
+  archive
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+### Dependencies
+
+- Removed `aifs` and `aifsens` from the `[all]` extra due to dependency conflicts with
+  `aifs2` (incompatible anemoi-models versions).
+
+## [0.15.0] - 2026-05-25
+
+### Added
+
+- Added Himawari-8/9 AHI ISatSS L2 Full Disk satellite data source (`HimawariAHI`)
+- Added GHCN-Daily global station observation data frame source (`GHCNDaily`)
+- Added NNJA conventional (in-situ + GPS RO) observation data source (`NNJAObsConv`)
+- Added GOES Geostationary Lightning Mapper L2 LCFA event data source (`GOESGLM`)
+- Added real-time GDAS conventional observation data source (`NomadsGDASObsConv`)
+- Added `quality` field to `E2STUDIO_SCHEMA` for observation QC markers
+- Added Climate in a Bottle tropical cyclone guidance and odds ration example
+
+### Changed
+
+- UFS Satellite Obs source is now the only one that provides the UFS specific
+  `channel_index` and general `sensor_index` fields, all other now provide
+  `sensor_index` only which can be used to consistently map from UFS to L1 products
+- Added `wavenumber` (cm⁻¹) field to all satellite schemas
+- Changed `channel_index` to `sensor_index` in `E2STUDIO_SCHEMA`
+- Added Orbit-2 precipitation downscaling model
+- Disabled Atlas example from documentation build due to slow performance
+
+### Fixed
+
+- Fixed potential `uint16` underflow in UFS channel index expansion
+- S3 upload bug in server utilities
+- Fixed pres obs from UFS to be Pascal units
+- Fixed chunk downloading race condition in file system cache for Zarr data sources
+- Fixed 180° longitude misalignment in ECMWF open-data sources for some GRIB files with
+  non-standard lon origin
+
+### Dependencies
+
+- Removed nested_asyncio for Python 3.14 compatibility and updated async data sources
+- Bumping minimum ecmwf-opendata version to 0.3.29 to resolve IFS data request errors
+
+## [0.14.0] - 2026-04-27
+
+### Added
+
+- Added GenCast 1 degree Mini model
+- Added CAMS Global atmospheric composition forecast data source (`CAMS_FX`)
+- Added MetOp AMSU-A Level 1B brightness temperature data source (`MetOpAMSUA`)
+- Added MetOp AVHRR Level 1B radiance/brightness temperature data source (`MetOpAVHRR`)
+- Added JPSS ATMS Level 1 BUFR brightness-temperature data source (`JPSS_ATMS`)
+- Added JPSS CrIS FSR Level 1 spectral radiance data source (`JPSS_CRIS`)
+- Added MetOp IASI Level 1C infrared brightness temperature data source (`MetOpIASI`)
+- Added NClimGrid daily CONUS gridded climate data source (`NClimGridDaily`)
+- Added MTG-I FCI Level-1C Full Disk satellite radiance data source (`MeteosatFCI`)
+
+### Fixed
+
+- Fixed source code links in documentation
+
+### Dependencies
+
+- Added `eumdac>=3.1.0` to `data` optional dependency group for EUMETSAT Data Store access
+- Moved package dependencies defaults to CUDA 13.0 following torch
+- Moving suggested Python version to 3.13
+- Pointing physicsnemo to git main source for torch 2.11 compatibility
+
+## [0.13.0] - 2026-03-20
+
+### Added
+
+- Added tropical cyclone tracking recipe with async TempestExtremes integration
+- Added NOAA UFS observation dataframe sources for satellite and conventional data
+- Added Earth2Studio base schema for dataframe sources
+- Added Planetary Computer data source for ECMWF IFS analysis data
+- Added accumulated variable support to NCAR ERA5 data source
+- Added routine to tile tensors to higher-dimensional tensors
+- Added routine to concatenate tensors along specified coordinate dimension
+- Added Planetary Computer data source for GOES cloud and moisture imagery
+- Added ability to have seperate data and model cache locations via env variables
+- Added random dataframe source
+- Added base reflectivity to MRMS data source
+- Added `fetch_dataframe` utility function
+- Added data assimilation model class
+- Added equirectangular interpolation data assimilation model
+- Added StormCast SDA model
+- Added beta serve utils with inference server and client implementations
+- Added HealPix data assimilation (HealDA) model
+- Added `energy_score` metric for multivariate ensemble forecast verification
+
+### Changed
+
+- Changed available date for ARCO data source to be dynamically updated
+- Changed ISD data frame return to master schema
+- handshake_coords is now accepting list of dimensions while remaining backwards-compatible
+- Updated CBottle infill to mixture of model checkpoints
+- Updated GraphCastOperational and GraphCastSmall latitude input / output to be [90,-90]
+- Updated GraphCast models to support multiple time inputs, multiple times will be looped not batched
+- Renamed `tolerance` parameter in ISD data source to `time_tolerance`
+
+### Removed
+
+- Removed device from cbottle SR load_model api
+
+### Fixed
+
+- Fixed timezone bug in `CBottleVideo` that converted UTC time to local system time
+- Bug in cbottle datasource resulting identical samples for multiple samples
+- Bug in StormCast loading out-of-date model package, introduced in `5518edecbabee371c824b34f0f2ec269a4d6094f`
+- Bug in spherical perturbations which did not use lmax from the SHT transform
+
+### Dependencies
+
+- Added pyarrow explicitly to core dependencies
+- Updated CBottle repo to NVlabs location
+- Updated Makani dependency hash to later version with pyproject toml fix
+- Updated ACE2 dependency hash with setuptools fix
+- Updated models using PhysicsNeMo to compliance with `nvidia-physicsnemo>=2.0`
+
+## [0.12.1] - 2026-01-29
+
+### Changed
+
+- Moved cBottle checkpoints to huggingface repo
+- Added config.json download for HF models to track downloads
+
+### Dependencies
+
+- Added onnxscript to onnx models to add support for newer torch versions
+- Moved lock file / CI system to torch 2.9.1
+
+## [0.12.0] - 2026-01-26
 
 ### Added
 
@@ -26,16 +181,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated GFS lexicon to include composite reflectivity
 - Moved most data sources from cfgrib to pygrib
 
-### Deprecated
-
-### Removed
-
 ### Fixed
 
 - Made tp in HRRR and GFS units m for package consistency
 - Fixed batched inference support for AIFS and AIFS ENS
-
-### Security
 
 ### Dependencies
 
@@ -53,7 +202,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added MRMS data source
 - Added IFS and IFS-ENS initial state datasources
 - Local datasource example
-- Added ``TimeWindow`` datasource wrapper for fetching data at multiple time offsets
+- Added `TimeWindow` datasource wrapper for fetching data at multiple time offsets
 - Added NOAA's Integrated Surface Database (ISD) data frame source
 
 ### Changed

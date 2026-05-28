@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -22,6 +22,14 @@ import numpy as np
 import pytest
 
 from earth2studio.data import CDS
+
+CDS_API_URL = "https://cds.climate.copernicus.eu/api"
+
+
+@pytest.fixture(autouse=True)
+def _set_cdsapi_url(monkeypatch):
+    """Point cdsapi at the CDS endpoint for all tests in this module."""
+    monkeypatch.setenv("CDSAPI_URL", CDS_API_URL)
 
 
 @pytest.mark.slow

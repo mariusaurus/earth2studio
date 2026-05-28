@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -33,6 +33,7 @@ from earth2studio.models.dx.derived import (
     DerivedWS,
 )
 from earth2studio.models.dx.identity import Identity  # noqa
+from earth2studio.models.dx.orbit2_precip import OrbitGlobalPrecip  # noqa
 from earth2studio.models.dx.precipitation_afno import PrecipitationAFNO  # noqa
 from earth2studio.models.dx.precipitation_afno_v2 import PrecipitationAFNOv2  # noqa
 from earth2studio.models.dx.solarradiation_afno import (
@@ -55,4 +56,5 @@ __all__ = [
     "SolarRadiationAFNO1H",
     "SolarRadiationAFNO6H",
     "WindgustAFNO",
+    "OrbitGlobalPrecip",
 ]

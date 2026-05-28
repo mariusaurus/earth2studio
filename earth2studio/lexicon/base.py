@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -16,6 +16,8 @@
 
 from collections.abc import Callable
 
+import pyarrow as pa
+
 
 class LexiconType(type):
     """Lexicon."""
@@ -23,6 +25,9 @@ class LexiconType(type):
     def __getitem__(cls, val: str) -> tuple[str, Callable]:
         """Retrieve variable name."""
         return cls.get_item(val)  # type: ignore[attr-defined]
+
+    def __contains__(cls, val: object) -> bool:
+        return val in cls.VOCAB  # type: ignore[attr-defined]
 
 
 E2STUDIO_VOCAB = {
@@ -41,14 +46,20 @@ E2STUDIO_VOCAB = {
     "sic": "sea ice concentration / sea ice area fraction (0 - 1)",
     "sp": "surface pressure (Pa)",
     "msl": "mean sea level pressure (Pa)",
+    "pres": "pressure (Pa) at a certain altitude(s)",
     "tcwv": "total column water vapor / precipitable water (kg m-2)",
     "tclw": "total column liquid water / vertically integrated liquid (cloud) water path (kg m-2)",
     "tciw": "total column ice water / vertically integrated ice (cloud) water path (kg m-2)",
     "tcw": "total column water (kg m-2)",
     "tp": "total precipitation (m)",
+    "lsp": "Large-scale precipitation accumulated over given time frame (m)",
+    "cp": "Convective precipitation accumulated over given time frame (m)",
+    "smlt": "Snowmelt accumulated over given time frame (m of water equivalent)",
     "tpp": "total precipitation probability",
     "tpi": "total precipitation index",
     "tp06": "total precipitation accumulated over past 6 hours (m)",
+    "tp12": "total precipitation accumulated over past 12 hours (m)",
+    "tp24": "total precipitation accumulated over past 24 hours (m)",
     "cp06": "convective precipitation accumulated over past 6 hours (m)",
     "tpf": "total precipitation flux (kg m-2 s-1)",
     "tcc": "total cloud cover (0 - 1)",
@@ -59,6 +70,8 @@ E2STUDIO_VOCAB = {
     "rsut": "outgoing shortwave radiation (W m-2)",
     "rsds": "surface downwelling shortwave radiation (W m-2)",
     "refc": "Maximum/Composite radar reflectivity (dB)",
+    "flashe": "lightning flash event optical energy (J)",
+    "flashc": "lightning flash event count (per detected event, 1.0)",
     "aerot": "aerosol optical thickness",
     "snowc": "snow coverage (%)",
     "csnow": "categorical snow",
@@ -191,6 +204,18 @@ E2STUDIO_VOCAB = {
     "swvl2": "volumetric soil water layer 2 (m³/m³)",
     "stl1": "soil temperature level 1 (K)",
     "stl2": "soil temperature level 2 (K)",
+    "fci01": "MTG FCI VIS (0.44 µm)",
+    "fci02": "MTG FCI VIS (0.51 µm)",
+    "fci03": "MTG FCI VIS (0.86 µm)",
+    "fci04": "MTG FCI VIS (0.91 µm)",
+    "fci05": "MTG FCI NIR (1.38 µm)",
+    "fci06": "MTG FCI NIR (1.61 µm)",
+    "fci07": "MTG FCI WV (6.30 µm)",
+    "fci08": "MTG FCI WV (7.35 µm)",
+    "fci09": "MTG FCI IR (8.70 µm)",
+    "fci10": "MTG FCI IR (9.66 µm)",
+    "fci11": "MTG FCI IR (12.30 µm)",
+    "fci12": "MTG FCI IR (13.30 µm)",
     "abi01c": "GOES ABI Channel 1 - Blue (0.47 µm)",
     "abi02c": "GOES ABI Channel 2 - Red (0.64 µm)",
     "abi03c": "GOES ABI Channel 3 - Vegetation (0.86 µm)",
@@ -207,6 +232,22 @@ E2STUDIO_VOCAB = {
     "abi14c": "GOES ABI Channel 14 - IR Longwave Window (11.20 µm)",
     "abi15c": "GOES ABI Channel 15 - Dirty IR Longwave Window (12.30 µm)",
     "abi16c": "GOES ABI Channel 16 - CO2 Longwave IR (13.30 µm)",
+    "ahi01": "Himawari AHI Band 1 - Visible Blue (0.47 µm)",
+    "ahi02": "Himawari AHI Band 2 - Visible Green (0.51 µm)",
+    "ahi03": "Himawari AHI Band 3 - Visible Red (0.64 µm)",
+    "ahi04": "Himawari AHI Band 4 - Near-IR (0.86 µm)",
+    "ahi05": "Himawari AHI Band 5 - Near-IR (1.6 µm)",
+    "ahi06": "Himawari AHI Band 6 - Near-IR (2.3 µm)",
+    "ahi07": "Himawari AHI Band 7 - Shortwave IR (3.9 µm)",
+    "ahi08": "Himawari AHI Band 8 - Water Vapor (6.2 µm)",
+    "ahi09": "Himawari AHI Band 9 - Water Vapor (6.9 µm)",
+    "ahi10": "Himawari AHI Band 10 - Water Vapor (7.3 µm)",
+    "ahi11": "Himawari AHI Band 11 - Cloud-top Phase (8.6 µm)",
+    "ahi12": "Himawari AHI Band 12 - Ozone (9.6 µm)",
+    "ahi13": "Himawari AHI Band 13 - Clean IR Window (10.4 µm)",
+    "ahi14": "Himawari AHI Band 14 - IR Window (11.2 µm)",
+    "ahi15": "Himawari AHI Band 15 - Dirty IR Window (12.4 µm)",
+    "ahi16": "Himawari AHI Band 16 - CO2 Longwave IR (13.3 µm)",
     "viirs01i": "VIIRS I1 - Red (0.64 µm)",
     "viirs02i": "VIIRS I2 - Near-IR (0.864 µm)",
     "viirs03i": "VIIRS I3 - SWIR (1.58 µm)",
@@ -228,6 +269,14 @@ E2STUDIO_VOCAB = {
     "viirs14m": "VIIRS M14 - LWIR (8.55 µm)",
     "viirs15m": "VIIRS M15 - LWIR (10.76 µm)",
     "viirs16m": "VIIRS M16 - LWIR (12.01 µm)",
+    "atms": "Advanced Technology Microwave Sounder brightness temperature (K)",
+    "avhrr": "AVHRR/3 calibrated observation (reflectance percent or brightness temperature K)",
+    "airs": "Atmospheric Infrared Sounder brightness temperature (K)",
+    "amsua": "Advanced Microwave Sounding Unit-A brightness temperature (K)",
+    "amsub": "Advanced Microwave Sounding Unit-B brightness temperature (K)",
+    "crisfsr": "Cross-track Infrared Sounder Full Spectral Resolution (CrIS-FSR) brightness temperature (K)",
+    "iasi": "Infrared Atmospheric Sounding Interferometer brightness temperature (K)",
+    "mhs": "Microwave Humidity Sounder brightness temperature (K)",
     "s3sy01aod": "Sentinel-3 SYNERGY aerosol optical depth band 01 (440 nm)",
     "s3sy02aod": "Sentinel-3 SYNERGY aerosol optical depth band 02 (550 nm)",
     "s3sy03aod": "Sentinel-3 SYNERGY aerosol optical depth band 03 (670 nm)",
@@ -269,4 +318,161 @@ E2STUDIO_VOCAB = {
     "strd06": "surface long-wave (thermal) radiation downwards (J m-2) past 6 hours",
     "sf": "snowfall water equivalent (kg m-2)",
     "ro": "runoff water equivalent (surface plus subsurface) (kg m-2)",
+    "swh": "significant wave height of combined wind waves and swell (m)",
+    "mwd": "mean wave direction (degrees true)",
+    "mwp": "mean wave period (s)",
+    "cdww": "coefficient of drag with waves (dimensionless)",
+    "wmb": "model bathymetry (m)",
+    "h1012": "significant wave height of waves with periods 10-12 seconds (m)",
+    "h1214": "significant wave height of waves with periods 12-14 seconds (m)",
+    "h1417": "significant wave height of waves with periods 14-17 seconds (m)",
+    "h1721": "significant wave height of waves with periods 17-21 seconds (m)",
+    "h2125": "significant wave height of waves with periods 21-25 seconds (m)",
+    "h2530": "significant wave height of waves with periods 25-30 seconds (m)",
+    "u10": "u-component of wind at 10 hPa (m s-1)",
+    "v10": "v-component of wind at 10 hPa (m s-1)",
+    "t10": "temperature at 10 hPa (K)",
+    "z10": "geopotential at 10 hPa (m2 s-2)",
+    "w10": "vertical wind at 10 hPa (Pa s-1)",
+    "aod550": "total aerosol optical depth at 550 nm (dimensionless)",
+    "duaod550": "dust aerosol optical depth at 550 nm (dimensionless)",
+    "omaod550": "organic matter aerosol optical depth at 550 nm (dimensionless)",
+    "bcaod550": "black carbon aerosol optical depth at 550 nm (dimensionless)",
+    "ssaod550": "sea salt aerosol optical depth at 550 nm (dimensionless)",
+    "suaod550": "sulphate aerosol optical depth at 550 nm (dimensionless)",
+    "tcco": "total column carbon monoxide (kg m-2)",
+    "tcno2": "total column nitrogen dioxide (kg m-2)",
+    "tco3": "total column ozone (kg m-2)",
+    "tcso2": "total column sulphur dioxide (kg m-2)",
 }
+
+
+E2STUDIO_SCHEMA = pa.schema(
+    [
+        # Core fields (common across data sources)
+        pa.field(
+            "time",
+            pa.timestamp("ns"),
+            metadata={"description": "Datetime of observation"},
+        ),
+        pa.field(
+            "lat",
+            pa.float32(),
+            metadata={"description": "Latitude coordinate of observation, [-90, 90]"},
+        ),
+        pa.field(
+            "lon",
+            pa.float32(),
+            metadata={"description": "Longitude coordinate of observation, [0, 360]"},
+        ),
+        pa.field(
+            "elev",
+            pa.float32(),
+            nullable=True,
+            metadata={"description": "Elevation of observation from surface (m)"},
+        ),
+        pa.field(
+            "observation",
+            pa.float32(),
+            metadata={"description": "Observation measurement"},
+        ),
+        pa.field(
+            "variable",
+            pa.string(),
+            metadata={"description": "Earth2Studio variable ID"},
+        ),
+        # Conventional observation fields
+        pa.field(
+            "pres",
+            pa.float32(),
+            nullable=True,
+            metadata={"description": "Pressure level of observation (Pa)"},
+        ),
+        pa.field(
+            "type",
+            pa.string(),
+            nullable=True,
+            metadata={"description": "Observation type ID"},
+        ),
+        pa.field(
+            "class",
+            pa.string(),
+            nullable=True,
+            metadata={"description": "Observation class"},
+        ),
+        pa.field(
+            "source",
+            pa.string(),
+            nullable=True,
+            metadata={"description": "Observation source ID"},
+        ),
+        pa.field(
+            "station",
+            pa.string(),
+            nullable=True,
+            metadata={"description": "Station ID"},
+        ),
+        pa.field(
+            "station_elev",
+            pa.float32(),
+            nullable=True,
+            metadata={"description": "Station elevation (m)"},
+        ),
+        # Quality control fields
+        pa.field(
+            "quality",
+            pa.uint16(),
+            nullable=True,
+            metadata={"description": "Quality control marker (0=best, 15=missing)"},
+        ),
+        # Satellite observation fields
+        pa.field(
+            "satellite",
+            pa.string(),
+            nullable=True,
+            metadata={"description": "Satellite platform ID"},
+        ),
+        pa.field(
+            "scan_angle",
+            pa.float32(),
+            nullable=True,
+            metadata={"description": "Satellite scan angle (degrees)"},
+        ),
+        pa.field(
+            "sensor_index",
+            pa.uint16(),
+            nullable=True,
+            metadata={"description": "Satellite sensor channel index"},
+        ),
+        pa.field(
+            "solza",
+            pa.float32(),
+            nullable=True,
+            metadata={"description": "Solar zenith angle (degrees)"},
+        ),
+        pa.field(
+            "solaza",
+            pa.float32(),
+            nullable=True,
+            metadata={"description": "Solar azimuth angle (degrees)"},
+        ),
+        pa.field(
+            "satellite_za",
+            pa.float32(),
+            nullable=True,
+            metadata={"description": "Satellite zenith angle (degrees)"},
+        ),
+        pa.field(
+            "satellite_aza",
+            pa.float32(),
+            nullable=True,
+            metadata={"description": "Satellite azimuth angle (degrees)"},
+        ),
+        pa.field(
+            "wavenumber",
+            pa.float64(),
+            nullable=True,
+            metadata={"description": "Channel wavenumber (cm^-1)"},
+        ),
+    ]
+)

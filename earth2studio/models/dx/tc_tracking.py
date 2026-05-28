@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -375,6 +375,10 @@ class TCTrackerWuDuan(torch.nn.Module, _TCTrackerBase):
     >>> # Remove current paths from models state
     >>> model.reset_path_buffer()
     >>> model.path_buffer.shape  # torch.Size([0])
+
+    Badges
+    ------
+    region:global class:mrf product:atmos year:2023
     """
 
     def __init__(
@@ -705,6 +709,10 @@ class TCTrackerVitart(torch.nn.Module, _TCTrackerBase):
     >>> # Remove current paths from models state
     >>> model.reset_path_buffer()
     >>> model.path_buffer.shape  # torch.Size([0])
+
+    Badges
+    ------
+    region:global class:mrf product:atmos
     """
 
     def __init__(

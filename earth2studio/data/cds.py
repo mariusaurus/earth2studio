@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -84,6 +84,10 @@ class CDS:
     be referenced here:
 
     - https://cds.climate.copernicus.eu/how-to-api
+
+    Badges
+    ------
+    region:global dataclass:reanalysis product:wind product:precip product:temp product:atmos
     """
 
     MAX_BYTE_SIZE = 20000000

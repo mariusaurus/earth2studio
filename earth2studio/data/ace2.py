@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -74,6 +74,10 @@ class ACE2ERA5Data:
     References
     ----------
     - ACE2-ERA5 paper: https://arxiv.org/html/2411.11268v1
+
+    Badges
+    ------
+    region:global dataclass:reanalysis product:wind product:precip product:temp product:atmos
     """
 
     _IC_ALLOWED_YEARS = [1940, 1950, 1979, 2001, 2020]

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -22,21 +22,24 @@ import pathlib
 import shutil
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Any
 
-import nest_asyncio
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import s3fs
-import xarray as xr  # noqa: F401  # kept in case of future extension; not currently used
 from loguru import logger
 from tqdm.asyncio import tqdm
 
 from earth2studio.data.utils import (
+    _sync_async,
     datasource_cache_root,
     prep_data_inputs,
 )
 from earth2studio.lexicon import ISDLexicon
+from earth2studio.utils.time import normalize_time_tolerance
+from earth2studio.utils.type import TimeTolerance
 
 
 @dataclass
@@ -56,9 +59,10 @@ class ISD:
     stations : list[str]
         Station IDs as the concatenation of USAF (6 chars) and WBAN (5 digits) to
         attempt to fetch data from.
-    tolerance : timedelta | np.timedelta64, optional
-        Time tolerance; nearest row within +/- tolerance is used per request, by default
-        np.timedelta64(0)
+    time_tolerance : TimeTolerance, optional
+        Time tolerance window for filtering observations. Accepts a single value
+        (symmetric ± window) or a tuple (lower, upper) for asymmetric windows,
+        by default np.timedelta64(10, 'm')
     cache : bool, optional
         Cache data source on local memory, by default True
     verbose : bool, optional
@@ -94,35 +98,61 @@ class ISD:
 
         # Bay area, lat lon bounding box (lat min, lon min, lat max, lon max)
         stations = ISD.get_stations_bbox((36, -124, 40, -120))
-        ds = ISD(stations, tolerance=timedelta(hours=2))
-        df = ds(datetime(2024, 1, 1, 20), ["station", "time", "lat", "lon", "t2m"])
+        ds = ISD(stations, time_tolerance=timedelta(hours=2))
+        df = ds(datetime(2024, 1, 1, 20), ["t2m", "ws10m"])
+
+    Badges
+    ------
+    region:na dataclass:observation product:wind product:precip product:temp
+    product:insitu
     """
+
+    SOURCE_ID = "earth2studio.data.isd"
+    SCHEMA = pa.schema(
+        [
+            pa.field("time", pa.timestamp("ns"), metadata={"isd_name": "DATE"}),
+            pa.field("lat", pa.float32(), metadata={"isd_name": "LATITUDE"}),
+            pa.field("lon", pa.float32(), metadata={"isd_name": "LONGITUDE"}),
+            pa.field(
+                "type",
+                pa.string(),
+                nullable=True,
+                metadata={"isd_name": "REPORT_TYPE"},
+            ),
+            pa.field(
+                "source",
+                pa.uint16(),
+                nullable=True,
+                metadata={"isd_name": "SOURCE"},
+            ),
+            pa.field(
+                "elev", pa.float32(), nullable=True, metadata={"isd_name": "ELEVATION"}
+            ),
+            pa.field("station", pa.string(), metadata={"isd_name": "STATION"}),
+            pa.field("observation", pa.float32()),
+            pa.field("variable", pa.string()),
+        ]
+    )
 
     def __init__(
         self,
         stations: list[str],
-        tolerance: timedelta | np.timedelta64 = np.timedelta64(0),
+        time_tolerance: TimeTolerance = np.timedelta64(10, "m"),
         cache: bool = True,
         verbose: bool = True,
         async_timeout: int = 600,
     ):
         self.stations = stations
-        # Normalize tolerance to python timedelta
-        if isinstance(tolerance, np.timedelta64):
-            self.tolerance = pd.to_timedelta(tolerance).to_pytimedelta()
-        else:
-            self.tolerance = tolerance
+        # Normalize tolerance to (lower, upper) python timedelta bounds
+        lower, upper = normalize_time_tolerance(time_tolerance)
+        self._tolerance_lower = pd.to_timedelta(lower).to_pytimedelta()
+        self._tolerance_upper = pd.to_timedelta(upper).to_pytimedelta()
         self._cache = cache
         self._tmp_cache_hash: str | None = None
         self._verbose = verbose
 
-        # Check to see if there is a running loop (initialized in async)
-        try:
-            nest_asyncio.apply()  # Monkey patch asyncio to work in notebooks
-            loop = asyncio.get_running_loop()
-            loop.run_until_complete(self._async_init())
-        except RuntimeError:
-            self.fs = None
+        # Filesystem is lazily initialized on first call
+        self.fs: s3fs.S3FileSystem | None = None
 
         self.async_timeout = async_timeout
 
@@ -139,6 +169,7 @@ class ISD:
         self,
         time: datetime | list[datetime] | np.ndarray,
         variable: str | list[str] | np.ndarray,
+        fields: str | list[str] | pa.Schema | None = None,
     ) -> pd.DataFrame:
         """Function to get data
 
@@ -149,6 +180,8 @@ class ISD:
         variable : str | list[str] | VariableArray
             String, list of strings or array of strings that refer to variables to
             return. Must be in the ISD lexicon.
+        fields : str | list[str] | pa.Schema | None, optional
+            Fields to include in output, by default None (all fields).
 
         Returns
         -------
@@ -157,26 +190,21 @@ class ISD:
         """
         # Run async path synchronously
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        if self.fs is None:
-            loop.run_until_complete(self._async_init())
-
-        df = loop.run_until_complete(self.fetch(time, variable))
-
-        # Delete cache if needed
-        if not self._cache:
-            shutil.rmtree(self.cache, ignore_errors=True)
+            df = _sync_async(
+                self.fetch, time, variable, fields, timeout=self.async_timeout
+            )
+        finally:
+            # Delete cache if needed
+            if not self._cache:
+                shutil.rmtree(self.cache, ignore_errors=True)
 
         return df
 
-    async def fetch(  # type: ignore[override]
+    async def fetch(
         self,
         time: datetime | list[datetime] | np.ndarray,
         variable: str | list[str] | np.ndarray,
+        fields: str | list[str] | pa.Schema | None = None,
     ) -> pd.DataFrame:
         """Async function to get data
 
@@ -187,6 +215,8 @@ class ISD:
         variable : str | list[str] | VariableArray
             String, list of strings or array of strings that refer to variables (column
             ids) to return. Must be in the ISD lexicon.
+        fields : str | list[str] | pa.Schema | None, optional
+            Fields to include in output, by default None (all fields).
 
         Returns
         -------
@@ -194,19 +224,13 @@ class ISD:
             ISD data frame
         """
         if self.fs is None:
-            raise ValueError(
-                "File store is not initialized! If you are calling this \
-            function directly make sure the data source is initialized inside the async \
-            loop!"
-            )
+            await self._async_init()
 
         # https://filesystem-spec.readthedocs.io/en/latest/async.html#using-from-async
-        if isinstance(self.fs, s3fs.S3FileSystem):
-            session = await self.fs.set_session(refresh=True)
-        else:
-            session = None
+        session = await self.fs.set_session(refresh=True)  # type: ignore[union-attr]
 
         time, variable = prep_data_inputs(time, variable)
+        schema = self.resolve_fields(fields)
         # Create cache dir if doesnt exist
         pathlib.Path(self.cache).mkdir(parents=True, exist_ok=True)
 
@@ -219,7 +243,7 @@ class ISD:
                 raise e
 
         # Load dataframes for each station-year (cached parquet if available)
-        func_map: list[asyncio.Task[_StationData]] = []
+        func_map: list[Any] = []
         for station in self.stations:
             for dt in time:
                 func_map.append(  # noqa: PERF401
@@ -231,7 +255,7 @@ class ISD:
             *func_map, desc="Fetching NOAA ISD data", disable=(not self._verbose)
         )
 
-        # Gather all dataframes by station and by year, keeping only those with DATE within requested time ± tolerance
+        # Gather all dataframes by station and by year
         filtered_df = []
         index = 0
         for station in self.stations:
@@ -239,8 +263,8 @@ class ISD:
                 df = station_year_dfs[index]
                 index += 1
 
-                tmin = dt - self.tolerance
-                tmax = dt + self.tolerance
+                tmin = dt + self._tolerance_lower
+                tmax = dt + self._tolerance_upper
 
                 if df.empty:
                     continue
@@ -250,29 +274,20 @@ class ISD:
                     filtered_df.append(df_window)
 
         if len(filtered_df) == 0:
-            return pd.DataFrame(columns=variable)
+            return pd.DataFrame(columns=schema.names)
 
         df = pd.concat(filtered_df, ignore_index=True)
 
-        # Standardize common metadata columns to lower case and normalize longitude
+        # Rename columns using schema metadata
         if not df.empty:
-            df = df.rename(
-                columns={
-                    "STATION": "station",
-                    "DATE": "time",
-                    "SOURCE": "source",
-                    "LATITUDE": "lat",
-                    "LONGITUDE": "lon",
-                    "ELEVATION": "elev",
-                }
-            )
+            df = df.rename(columns=self.column_map())
             df["station"] = df["station"].astype(str)
             # Normalize longitude from [-180, 180) to [0, 360)
             if "lon" in df.columns:
                 df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
                 df["lon"] = (df["lon"] + 360.0) % 360.0
 
-        # Process columns
+        # Process observation columns
         df = self._extract_ws10m(df)
         df = self._extract_uv(df)
         df = self._extract_tp(df)
@@ -281,13 +296,45 @@ class ISD:
         df = self._extract_d2m(df)
         df = self._extract_tcc(df)
 
-        df = df.loc[:, variable]
+        # Transform to long format (one observation per row)
+        result = self._create_observation_dataframe(df, variable, schema)
+        result.attrs["source"] = self.SOURCE_ID
 
         # Close aiohttp client if s3fs
         if session:
             await session.close()
 
-        return df
+        return result
+
+    def _create_observation_dataframe(
+        self, df: pd.DataFrame, variables: list[str], schema: pa.Schema
+    ) -> pd.DataFrame:
+        """Transform wide format DataFrame to long format with observation/variable columns.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Wide format DataFrame with variable columns
+        variables : list[str]
+            List of variable names to include
+
+        Returns
+        -------
+        pd.DataFrame
+            Long format DataFrame with observation and variable columns
+        """
+        # Metadata columns to keep (fields with isd_name metadata)
+        id_vars = [field.name for field in schema if field.name in df.columns]
+        value_vars = [v for v in variables if v in df.columns]
+
+        df_long = df.melt(
+            id_vars=id_vars,
+            value_vars=value_vars,
+            var_name="variable",
+            value_name="observation",
+        )
+        df_long = df_long.dropna(subset=["observation"]).reset_index(drop=True)
+        return df_long[[name for name in schema.names]]
 
     async def _fetch_station_year(self, station_id: str, year: int) -> pd.DataFrame:
         """Async method for fetching csv to given station
@@ -336,6 +383,83 @@ class ISD:
                 return pd.DataFrame()
 
         return df
+
+    @classmethod
+    def resolve_fields(cls, fields: str | list[str] | pa.Schema | None) -> pa.Schema:
+        """Convert fields parameter into a validated PyArrow schema.
+
+        Parameters
+        ----------
+        fields : str | list[str] | pa.Schema | None
+            Field specification. Can be:
+            - None: Returns the full class SCHEMA
+            - str: Single field name to select from SCHEMA
+            - list[str]: List of field names to select from SCHEMA
+            - pa.Schema: Validated against class SCHEMA for compatibility
+
+        Returns
+        -------
+        pa.Schema
+            A PyArrow schema containing only the requested fields
+
+        Raises
+        ------
+        KeyError
+            If a requested field name is not found in the class SCHEMA
+        TypeError
+            If a field type in the provided schema doesn't match the class SCHEMA
+        ValueError
+            If required fields are missing
+        """
+        if fields is None:
+            return cls.SCHEMA
+
+        if isinstance(fields, str):
+            fields = [fields]
+
+        if isinstance(fields, pa.Schema):
+            # Validate provided schema against class schema
+            for field in fields:
+                if field.name not in cls.SCHEMA.names:
+                    raise KeyError(
+                        f"Field '{field.name}' not found in class SCHEMA. "
+                        f"Available fields: {cls.SCHEMA.names}"
+                    )
+                expected_type = cls.SCHEMA.field(field.name).type
+                if field.type != expected_type:
+                    raise TypeError(
+                        f"Field '{field.name}' has type {field.type}, "
+                        f"expected {expected_type} from class SCHEMA"
+                    )
+            return fields
+
+        # fields is list[str] - select fields from class schema
+        selected_fields = []
+        for name in fields:
+            if name not in cls.SCHEMA.names:
+                raise KeyError(
+                    f"Field '{name}' not found in class SCHEMA. "
+                    f"Available fields: {cls.SCHEMA.names}"
+                )
+            selected_fields.append(cls.SCHEMA.field(name))
+
+        return pa.schema(selected_fields)
+
+    @classmethod
+    def column_map(cls) -> dict[str, str]:
+        """Build column name mapping from ISD source names to schema names.
+
+        Returns
+        -------
+        dict[str, str]
+            Mapping from ISD column names to schema field names
+        """
+        mapping = {}
+        for field in cls.SCHEMA:
+            if field.metadata and b"isd_name" in field.metadata:
+                isd_name = field.metadata[b"isd_name"].decode("utf-8")
+                mapping[isd_name] = field.name
+        return mapping
 
     @property
     def cache(self) -> str:

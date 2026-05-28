@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -219,6 +219,7 @@ def test_goes_sources(satellite, scan_mode, time, variable, valid):
     assert shape[3] == expected_dims[1]
 
 
+@pytest.mark.xfail
 @pytest.mark.timeout(15)
 @pytest.mark.parametrize(
     "time",

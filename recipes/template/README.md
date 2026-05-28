@@ -8,21 +8,14 @@ Recipe description here, keep it around a single paragraph.
 
 ## Prerequisites
 
-List anything specific a user is expected to have installed / accessible here.
-This could be things such as domain knowledge, data of certain type, model checkpoints
-etc.
+List anything specific a user is expected to have installed or accessible here.
+This could be things such as domain knowledge, data of certain type, model checkpoints.
 
 ### Software
 
-Pyproject TOML / recipe-requirements.txt handles any Python dependencies.
+Pyproject TOML handles any Python dependencies.
 
-```bash
-uv export --format requirements-txt --no-hashes > recipe-requirements.txt
-```
-
-Note that this is not called `requirements.txt` due to tooling conflicts.
-
-If there are system dependencies needed list them here, e.g.
+If there are system dependencies needed list them here, for example:
 
 - Docker - minimum version: 23.0.1
 - NVIDIA Container Toolkit minimum version: 1.13.5
@@ -30,7 +23,7 @@ If there are system dependencies needed list them here, e.g.
 
 ### Hardware
 
-If applicable, e.g.
+If applicable, for example:
 
 - GPUs: L40, L40S, RTX6000
 - CPU: 16 cores
@@ -40,7 +33,7 @@ If applicable, e.g.
 ## Quick Start
 
 Add a quick start to get the user running with the user up and running as fast as
-possible, e.g.
+possible, for example:
 
 Start by installing the required packages with pip:
 
@@ -60,19 +53,19 @@ Run the template
 uv run python main.py
 
 >> Hello
->> 0.11.0
+>> 0.14.0
 
 uv run python main.py print.hello False
 
->> 0.11.0
+>> 0.14.0
 ```
 
 ## Documentation
 
-Any additional documentation needed to explain to the user different options, APIs, etc.
+Any additional documentation needed to explain to the user different options, APIs.
 This can be as extensive or brief as desired.
-It is expected for users to interact / modify the source code.
-E.g.
+It is expected for users to interact or modify the source code.
+For example:
 
 Possible options for this template include:
 

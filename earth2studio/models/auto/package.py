@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -238,6 +238,7 @@ class Package:
         """
         default_cache = os.path.join(os.path.expanduser("~"), ".cache", "earth2studio")
         default_cache = os.environ.get("EARTH2STUDIO_CACHE", default_cache)
+        default_cache = os.environ.get("EARTH2STUDIO_MODEL_CACHE", default_cache)
         return os.path.join(default_cache, path)
 
     @classmethod

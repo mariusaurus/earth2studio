@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -90,7 +90,7 @@ class CBottle3D(torch.nn.Module, AutoModelMixin):
     sampler_steps : int, optional
         Number of diffusion steps, by default 18
     sigma_max : float, optional
-        Noise amplitude used to generate latent variables, by default 80
+        Noise amplitude used to generate latent variables, by default 200
     batch_size : int, optional
         Batch size to generate time samples at, consider adjusting based on hardware
         being used, by default 4
@@ -104,6 +104,10 @@ class CBottle3D(torch.nn.Module, AutoModelMixin):
         Does nothing at the moment, by default False
     verbose : bool, optional
         Print generation progress, by default True
+
+    Badges
+    ------
+    region:global dataclass:simulation product:wind product:precip product:temp product:atmos product:ocean
     """
 
     VARIABLES = np.array(list(CBottleLexicon.VOCAB.keys()))
@@ -225,7 +229,8 @@ class CBottle3D(torch.nn.Module, AutoModelMixin):
             batch["second_of_day"] = second_of_day[start_idx:end_idx]
             batch["day_of_year"] = day_of_year[start_idx:end_idx]
 
-            output, coords = self.core_model.sample(batch, seed=self.seed)
+            seed = None if self.seed is None else self.seed + i
+            output, coords = self.core_model.sample(batch, seed=seed)
             output = output[:, varidx]
             outputs.append(output)
 
@@ -370,7 +375,7 @@ class CBottle3D(torch.nn.Module, AutoModelMixin):
     def load_default_package(cls) -> Package:
         """Default pre-trained CBottle3D model package from Nvidia model registry"""
         return Package(
-            "ngc://models/nvidia/earth-2/cbottle@1.2",
+            "hf://nvidia/cbottle@eebd93c85b3cd3a5a8f79c546ed917b0b80438f4",
             cache_options={
                 "cache_storage": Package.default_cache("cbottle"),
                 "same_names": True,
@@ -429,10 +434,15 @@ class CBottle3D(torch.nn.Module, AutoModelMixin):
             checkpoints, (100.0, 10.0)
         )
 
+        try:
+            package.resolve("config.json")  # HF tracking download statistics
+        except FileNotFoundError:
+            pass
+
         # The following code is left here for reference of how to access the AMIP SST
-        # data from the original data store. NGC is faster and cleaner so it is also
+        # data from the original data store. HF is faster and cleaner so it is also
         # provided there.
-        # sst_url = "https://esgf.ceda.ac.uk/thredds/dodsC/esg_cmip6/input4MIPs/CMIP6Plus/CMIP/PCMDI/PCMDI-AMIP-1-1-9/ocean/mon/tosbcs/gn/v20230512/"
+        # sst_url = "https://esgf.ceda.ac.uk/thredds/catalog/esg_cmip6/input4MIPs/CMIP6Plus/CMIP/PCMDI/PCMDI-AMIP-1-1-9/ocean/mon/tosbcs/gn/v20230512/"
         # sst_file = (
         #     "tosbcs_input4MIPs_SSTsAndSeaIce_CMIP_PCMDI-AMIP-1-1-9_gn_187001-202212.nc"
         # )

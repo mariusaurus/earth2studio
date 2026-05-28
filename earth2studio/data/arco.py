@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -20,9 +20,11 @@ import os
 import pathlib
 import re
 import shutil
+import uuid
+from collections import defaultdict
+from collections.abc import Callable
 from datetime import datetime
 
-import nest_asyncio
 import numpy as np
 import xarray as xr
 import zarr
@@ -32,6 +34,7 @@ from tqdm.asyncio import tqdm
 
 from earth2studio.data.utils import (
     AsyncCachingFileSystem,
+    _sync_async,
     datasource_cache_root,
     get_msc_filesystem,
     prep_data_inputs,
@@ -71,10 +74,16 @@ class ARCO:
     The data source will automatically use Multi-Storage Client (MSC) if available,
     otherwise it will fallback to using gcsfs directly. MSC can provide better
     performance for cloud storage access.
+
+    Badges
+    ------
+    region:global dataclass:reanalysis product:wind product:precip product:temp product:atmos
     """
 
     ARCO_LAT = np.linspace(90, -90, 721)
     ARCO_LON = np.linspace(0, 359.75, 1440)
+    ARCO_PATH = "/gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
+    ARCO_TIME_STOP = datetime(year=2023, month=11, day=11)
 
     def __init__(
         self,
@@ -85,20 +94,13 @@ class ARCO:
 
         self._cache = cache
         self._verbose = verbose
+        self._tmp_cache_hash: str | None = None
 
-        # Check to see if there is a running loop (initialized in async)
-        try:
-            nest_asyncio.apply()  # Monkey patch asyncio to work in notebooks
-            loop = asyncio.get_running_loop()
-            loop.run_until_complete(self._async_init())
-        except RuntimeError:
-            # Else we assume that async calls will be used which in that case
-            # we will init the group in the call function when we have the loop
-            self.zarr_group: zarr.core.group.AsyncGroup | None = None
-            self.level_coords = None
-            # Model-level store
-            self.ml_zarr_group: zarr.core.group.AsyncGroup | None = None
-            self.ml_level_coords = None
+        self.zarr_group: zarr.core.group.AsyncGroup | None = None
+        self.level_coords = None
+        # Model-level store
+        self.ml_zarr_group: zarr.core.group.AsyncGroup | None = None
+        self.ml_level_coords = None
 
         self.async_timeout = async_timeout
 
@@ -143,9 +145,15 @@ class ARCO:
         # Pressure/surface store
         zstore = zarr.storage.FsspecStore(
             fs,
-            path="/gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3",
+            path=self.ARCO_PATH,
         )
         self.zarr_group = await zarr.api.asynchronous.open(store=zstore, mode="r")
+
+        if "valid_time_stop" in self.zarr_group.attrs:
+            ARCO.ARCO_TIME_STOP = datetime.strptime(
+                self.zarr_group.attrs["valid_time_stop"], "%Y-%m-%d"
+            )
+
         self.level_coords = await (await self.zarr_group.get("level")).getitem(
             slice(None)
         )
@@ -181,22 +189,13 @@ class ARCO:
         """
 
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            # If no event loop exists, create one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        if self.zarr_group is None:
-            loop.run_until_complete(self._async_init())
-
-        xr_array = loop.run_until_complete(
-            asyncio.wait_for(self.fetch(time, variable), timeout=self.async_timeout)
-        )
-
-        # Delete cache if needed
-        if not self._cache:
-            shutil.rmtree(self.cache, ignore_errors=True)
+            xr_array = _sync_async(
+                self.fetch, time, variable, timeout=self.async_timeout
+            )
+        finally:
+            # Delete cache if needed
+            if not self._cache:
+                shutil.rmtree(self.cache, ignore_errors=True)
 
         return xr_array
 
@@ -221,11 +220,7 @@ class ARCO:
             ERA5 weather data array from ARCO
         """
         if self.zarr_group is None:
-            raise ValueError(
-                "Zarr group is not initialized! If you are calling this \
-            function directly make sure the data source is initialized inside the async \
-            loop!"
-            )
+            await self._async_init()
 
         time, variable = prep_data_inputs(time, variable)
         # Create cache dir if doesnt exist
@@ -247,25 +242,91 @@ class ARCO:
             },
         )
 
-        args = [
-            (t, i, v, j) for j, v in enumerate(variable) for i, t in enumerate(time)
-        ]
-        func_map = map(functools.partial(self.fetch_wrapper, xr_array=xr_array), args)
+        groups: dict[tuple[str, bool], list[tuple[str, int, str, Callable]]] = (
+            defaultdict(list)
+        )
+        for j, v in enumerate(variable):
+            try:
+                arco_name, modifier = ARCOLexicon[v]
+            except KeyError:
+                logger.error(f"variable id {v} not found in ARCO lexicon")
+                raise
+            parts = arco_name.split("::")
+            arco_variable = parts[0]
+            level = parts[1] if len(parts) > 1 else ""
+            is_mdl = self._is_mdl_level(v)
+            groups[(arco_variable, is_mdl)].append((v, j, level, modifier))
 
-        # Launch all fetch requests
+        # Build one task per unique (time, zarr_array) combination
+        args = [
+            (t, i, arco_variable, is_mdl, var_entries)
+            for (arco_variable, is_mdl), var_entries in groups.items()
+            for i, t in enumerate(time)
+        ]
+        func_map = map(
+            functools.partial(self.fetch_chunk_group, xr_array=xr_array), args
+        )
+
         await tqdm.gather(
             *func_map, desc="Fetching ARCO data", disable=(not self._verbose)
         )
         return xr_array
 
-    async def fetch_wrapper(
+    async def fetch_chunk_group(
         self,
-        e: tuple[datetime, int, str, int],
+        e: tuple[datetime, int, str, bool, list],
         xr_array: xr.DataArray,
     ) -> None:
-        """Small wrapper to pack arrays into the DataArray"""
-        out = await self.fetch_array(e[0], e[2])
-        xr_array[e[1], e[3]] = out
+        """Fetch a Zarr chunk once and distribute slices to all variables
+        that share the same underlying array.
+
+        Parameters
+        ----------
+        e : tuple
+            (time, time_index, arco_variable, is_mdl, var_entries) where
+            var_entries is [(var_name, var_idx, level, modifier), ...]
+        xr_array : xr.DataArray
+            Output array to write into
+        """
+        t, time_idx, arco_variable, is_mdl, var_entries = e
+
+        if self.zarr_group is None or self.ml_zarr_group is None:
+            raise ValueError("Zarr group is not initialized")
+
+        time_index = self._get_time_index(t)
+
+        if is_mdl:
+            zarr_group = self.ml_zarr_group
+            level_coords = self.ml_level_coords
+        else:
+            zarr_group = self.zarr_group
+            level_coords = self.level_coords
+
+        zarr_array = await zarr_group.get(arco_variable)
+        shape = zarr_array.shape
+
+        if len(shape) == 2:
+            # static variable
+            data = await zarr_array.getitem(slice(None))
+            for var_name, var_idx, level, modifier in var_entries:
+                xr_array[time_idx, var_idx] = modifier(data)
+        elif len(shape) == 3:
+            # surface variable
+            data = await zarr_array.getitem(time_index)
+            for var_name, var_idx, level, modifier in var_entries:
+                xr_array[time_idx, var_idx] = modifier(data)
+        else:
+            # atmospheric variable : fetch all needed levels at once
+            level_indices = []
+            for var_name, var_idx, level, modifier in var_entries:
+                level_indices.append(np.searchsorted(level_coords, int(level)))
+
+            # Fetch all levels in a single chunk read
+            all_levels_data = await zarr_array.getitem(time_index)
+            for k, (var_name, var_idx, level, modifier) in enumerate(var_entries):
+                xr_array[time_idx, var_idx] = modifier(
+                    all_levels_data[level_indices[k]]
+                )
 
     async def fetch_array(self, time: datetime, variable: str) -> np.ndarray:
         """Fetches requested array from remote store
@@ -328,7 +389,12 @@ class ARCO:
         """Get the appropriate cache location."""
         cache_location = os.path.join(datasource_cache_root(), "arco")
         if not self._cache:
-            cache_location = os.path.join(cache_location, "tmp_arco")
+            if self._tmp_cache_hash is None:
+                # First access for temp cache: create a random suffix to avoid collisions
+                self._tmp_cache_hash = uuid.uuid4().hex[:8]
+            cache_location = os.path.join(
+                cache_location, f"tmp_arco_{self._tmp_cache_hash}"
+            )
         return cache_location
 
     @classmethod
@@ -351,9 +417,9 @@ class ARCO:
                     f"Requested date time {time} needs to be after January 1st, 1940 for ARCO"
                 )
 
-            if time >= datetime(year=2023, month=11, day=10):
+            if time > cls.ARCO_TIME_STOP:
                 raise ValueError(
-                    f"Requested date time {time} needs to be before November 10th, 2023 for ARCO"
+                    f"Requested date time {time} needs to be on or before {cls.ARCO_TIME_STOP.strftime('%B %d, %Y')} for ARCO"
                 )
 
             # if not self.available(time):
@@ -430,7 +496,7 @@ class ARCO:
 
         gcstore = zarr.storage.FsspecStore(
             fs,
-            path="/gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3",
+            path=cls.ARCO_PATH,
         )
 
         zarr_group = zarr.open(gcstore, mode="r")

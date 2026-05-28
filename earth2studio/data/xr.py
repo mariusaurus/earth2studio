@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -186,6 +186,28 @@ class InferenceOutputSource:
             variable = [variable]
 
         return self.da.sel(time=time, variable=variable)
+
+    async def fetch(  # type: ignore[override]
+        self,
+        time: datetime | list[datetime] | TimeArray,
+        variable: str | list[str] | VariableArray,
+    ) -> xr.DataArray:
+        """Async function to get data
+
+        Parameters
+        ----------
+        time : datetime | list[datetime] | TimeArray
+            Timestamps to return data for (UTC).
+        variable : str | list[str] | VariableArray
+            String, list of strings or array of strings that refer to variables to
+            return. Must be in the GFS lexicon.
+
+        Returns
+        -------
+        xr.DataArray
+            Inference output data array
+        """
+        return self.__call__(time, variable)
 
 
 class DataSetFile:

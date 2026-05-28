@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -46,11 +46,11 @@ from earth2studio.utils.interp import NearestNeighborInterpolator
 from earth2studio.utils.type import CoordSystem
 
 try:
-    from physicsnemo.models import Module
+    from physicsnemo.models import DiT
     from physicsnemo.utils.zenith_angle import cos_zenith_angle
 except ImportError:
     OptionalDependencyFailure("stormscope")
-    Module = None  # type: ignore[assignment]
+    DiT = None  # type: ignore[assignment]
     cos_zenith_angle = None  # type: ignore[assignment]
 
 from earth2studio.models.nn.stormscope_util import (
@@ -59,7 +59,7 @@ from earth2studio.models.nn.stormscope_util import (
 )
 
 
-def model_wrap(model: Module) -> nn.Module:
+def model_wrap(model: DiT) -> nn.Module:
     """Wrap a physicsnemo Module so it is compatible with the preconditioning
     and sampler used by StormScope.
     TODO: Remove once core EDMPrecond architecture is fully upstreamed
@@ -239,7 +239,7 @@ class StormScopeBase(torch.nn.Module, AutoModelMixin, PrognosticMixin):
     def load_default_package(cls) -> Package:
         """Load a default local package for StormScope models."""
         package = Package(
-            "hf://nvidia/stormscope-goes-mrms@3408641c72d9bf631e814c185bb129ac53c80785",
+            "hf://nvidia/stormscope-goes-mrms@6ee31e07afe3decb012740f3be17531207c3db5e",
             cache_options={
                 "cache_storage": Package.default_cache("stormscope"),
                 "same_names": True,
@@ -1027,6 +1027,10 @@ class StormScopeGOES(StormScopeBase):
     To have a unified coordinate system over CONUS for convenience, the model uses the HRRR grid.
     As a result, there are portions of the domain which go beyond the extent of the GOES-East data,
     so these portions are masked as invalid (set to NaN).
+
+    Badges
+    ------
+    region:na class:nwc product:sat year:2026 gpu:80gb
     """
 
     def __init__(
@@ -1190,13 +1194,18 @@ class StormScopeGOES(StormScopeBase):
         PrognosticModel
             Instantiated StormScopeGOES model
         """
+        try:
+            package.resolve("config.json")  # HF tracking download statistics
+        except FileNotFoundError:
+            pass
+
         with open(package.resolve("registry.json")) as f:
             registry = json.load(f)
             pkg = registry[model_name]
 
         model_spec = []
         for m in pkg["checkpoints"]:
-            model = Module.from_checkpoint(package.resolve(m["path"]))
+            model = DiT.from_checkpoint(package.resolve(m["path"]))
             model_spec.append(
                 {
                     "model": model_wrap(model),
@@ -1350,6 +1359,10 @@ class StormScopeMRMS(StormScopeBase):
     To have a unified coordinate system over CONUS for convenience, the model uses the HRRR grid.
     As a result, there are portions of the domain which go beyond the extent of the MRMS data,
     so these portions are masked as invalid (set to NaN).
+
+    Badges
+    ------
+    region:na class:nwc product:radar year:2026 gpu:80gb
     """
 
     _STATE_FIRST = False
@@ -1531,6 +1544,10 @@ class StormScopeMRMS(StormScopeBase):
         PrognosticModel
             Instantiated StormScopeMRMS model
         """
+        try:
+            package.resolve("config.json")  # HF tracking download statistics
+        except FileNotFoundError:
+            pass
 
         with open(package.resolve("registry.json")) as f:
             registry = json.load(f)
@@ -1538,7 +1555,7 @@ class StormScopeMRMS(StormScopeBase):
 
         model_spec = []
         for m in pkg["checkpoints"]:
-            model = Module.from_checkpoint(package.resolve(m["path"]))
+            model = DiT.from_checkpoint(package.resolve(m["path"]))
             model_spec.append(
                 {
                     "model": model_wrap(model),

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -358,6 +358,10 @@ class SolarRadiationAFNO(torch.nn.Module, AutoModelMixin):
 class SolarRadiationAFNO1H(SolarRadiationAFNO):
     """Solar Radiation AFNO diagnostic model for 1-hour frequency predictions.
     Predicts the accumulated global surface solar radiation over 1 hour [Jm^-2].
+
+    Badges
+    ------
+    region:global class:mrf product:solar year:2024 gpu:40gb
     """
 
     freq = "1h"
@@ -378,6 +382,10 @@ class SolarRadiationAFNO1H(SolarRadiationAFNO):
 class SolarRadiationAFNO6H(SolarRadiationAFNO):
     """Solar Radiation AFNO diagnostic model for 6-hour frequency predictions.
     Predicts the accumulated global surface solar radiation over 6 hours [Jm^-2].
+
+    Badges
+    ------
+    region:global class:mrf product:solar year:2024 gpu:40gb
     """
 
     freq = "6h"

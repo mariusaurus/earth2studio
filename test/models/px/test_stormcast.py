@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -111,7 +111,7 @@ def test_stormcast_call(time, device):
         conditioning_stds=conditioning_stds,
         conditioning_variables=conditioning_variables,
         conditioning_data_source=r_condition,
-        sampler_args={"num_steps": 2},
+        sampler_steps=2,
     ).to(device)
 
     # Get Data and convert to tensor, coords
@@ -190,7 +190,7 @@ def test_stormcast_iter(ensemble, device):
         conditioning_stds=conditioning_stds,
         conditioning_variables=conditioning_variables,
         conditioning_data_source=r_condition,
-        sampler_args={"num_steps": 2},
+        sampler_steps=2,
     ).to(device)
 
     # Get Data and convert to tensor, coords
@@ -331,7 +331,7 @@ def test_stormcast_package(cond_dims, device, model):
     p.conditioning_data_source = r_condition
 
     # Decrease the number of edm sampling steps to speed up the test
-    p.sampler_args = {"num_steps": 2}
+    p.sampler_steps = 2
 
     # Get Data and convert to tensor, coords
     lead_time = p.input_coords()["lead_time"]

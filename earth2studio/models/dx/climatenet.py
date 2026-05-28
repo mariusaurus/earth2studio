@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -68,6 +68,10 @@ class ClimateNet(torch.nn.Module, AutoModelMixin):
         Model center normalization tensor of size [20,1,1]
     scale : torch.Tensor
         Model scale normalization tensor of size [20,1,1]
+
+    Badges
+    ------
+    region:global class:mrf product:atmos year:2021 gpu:40gb
     """
 
     def __init__(

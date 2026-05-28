@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -15,12 +15,22 @@
 # limitations under the License.
 
 from collections import OrderedDict
+from datetime import timedelta
 
 import numpy as np
 
+FrameSchema = OrderedDict[str, np.ndarray]
 CoordSystem = OrderedDict[str, np.ndarray]
 
 # Specific dimension custom types
 VariableArray = np.ndarray[str]
 LeadTimeArray = np.ndarray[np.timedelta64]
 TimeArray = np.ndarray[np.datetime64]
+FieldArray = np.ndarray[str]
+
+TimeTolerance = (
+    timedelta
+    | np.timedelta64
+    | tuple[timedelta, timedelta]
+    | tuple[np.timedelta64, np.timedelta64]
+)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -143,6 +143,10 @@ class FengWu(torch.nn.Module, AutoModelMixin, PrognosticMixin):
         Model variable center normalization tensor of size [69]
     scale : torch.Tensor
         Model variable scale normalization tensor of size [69]
+
+    Badges
+    ------
+    region:global class:mrf product:wind product:temp product:atmos year:2023 gpu:40gb
     """
 
     def __init__(
