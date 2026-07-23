@@ -22,9 +22,9 @@ import pathlib
 import shutil
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Any
 
-import nest_asyncio
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -33,10 +33,13 @@ from loguru import logger
 from tqdm.asyncio import tqdm
 
 from earth2studio.data.utils import (
+    _sync_async,
     datasource_cache_root,
     prep_data_inputs,
 )
 from earth2studio.lexicon import ISDLexicon
+from earth2studio.utils.time import normalize_time_tolerance
+from earth2studio.utils.type import TimeTolerance
 
 
 @dataclass
@@ -56,9 +59,10 @@ class ISD:
     stations : list[str]
         Station IDs as the concatenation of USAF (6 chars) and WBAN (5 digits) to
         attempt to fetch data from.
-    tolerance : timedelta | np.timedelta64, optional
-        Time tolerance; nearest row within +/- tolerance is used per request, by default
-        np.timedelta64(0)
+    time_tolerance : TimeTolerance, optional
+        Time tolerance window for filtering observations. Accepts a single value
+        (symmetric ± window) or a tuple (lower, upper) for asymmetric windows,
+        by default np.timedelta64(10, 'm')
     cache : bool, optional
         Cache data source on local memory, by default True
     verbose : bool, optional
@@ -94,8 +98,13 @@ class ISD:
 
         # Bay area, lat lon bounding box (lat min, lon min, lat max, lon max)
         stations = ISD.get_stations_bbox((36, -124, 40, -120))
-        ds = ISD(stations, tolerance=timedelta(hours=2))
+        ds = ISD(stations, time_tolerance=timedelta(hours=2))
         df = ds(datetime(2024, 1, 1, 20), ["t2m", "ws10m"])
+
+    Badges
+    ------
+    region:na dataclass:observation product:wind product:precip product:temp
+    product:insitu
     """
 
     SOURCE_ID = "earth2studio.data.isd"
@@ -107,18 +116,14 @@ class ISD:
             pa.field(
                 "type",
                 pa.string(),
-                nullable=True,
                 metadata={"isd_name": "REPORT_TYPE"},
             ),
             pa.field(
                 "source",
-                pa.uint16(),
-                nullable=True,
+                pa.string(),
                 metadata={"isd_name": "SOURCE"},
             ),
-            pa.field(
-                "elev", pa.float32(), nullable=True, metadata={"isd_name": "ELEVATION"}
-            ),
+            pa.field("elev", pa.float32(), metadata={"isd_name": "ELEVATION"}),
             pa.field("station", pa.string(), metadata={"isd_name": "STATION"}),
             pa.field("observation", pa.float32()),
             pa.field("variable", pa.string()),
@@ -128,28 +133,22 @@ class ISD:
     def __init__(
         self,
         stations: list[str],
-        tolerance: timedelta | np.timedelta64 = np.timedelta64(0),
+        time_tolerance: TimeTolerance = np.timedelta64(10, "m"),
         cache: bool = True,
         verbose: bool = True,
         async_timeout: int = 600,
     ):
         self.stations = stations
-        # Normalize tolerance to python timedelta
-        if isinstance(tolerance, np.timedelta64):
-            self.tolerance = pd.to_timedelta(tolerance).to_pytimedelta()
-        else:
-            self.tolerance = tolerance
+        # Normalize tolerance to (lower, upper) python timedelta bounds
+        lower, upper = normalize_time_tolerance(time_tolerance)
+        self._tolerance_lower = pd.to_timedelta(lower).to_pytimedelta()
+        self._tolerance_upper = pd.to_timedelta(upper).to_pytimedelta()
         self._cache = cache
         self._tmp_cache_hash: str | None = None
         self._verbose = verbose
 
-        # Check to see if there is a running loop (initialized in async)
-        try:
-            nest_asyncio.apply()  # Monkey patch asyncio to work in notebooks
-            loop = asyncio.get_running_loop()
-            loop.run_until_complete(self._async_init())
-        except RuntimeError:
-            self.fs = None
+        # Filesystem is lazily initialized on first call
+        self.fs: s3fs.S3FileSystem | None = None
 
         self.async_timeout = async_timeout
 
@@ -187,19 +186,13 @@ class ISD:
         """
         # Run async path synchronously
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        if self.fs is None:
-            loop.run_until_complete(self._async_init())
-
-        df = loop.run_until_complete(self.fetch(time, variable, fields))
-
-        # Delete cache if needed
-        if not self._cache:
-            shutil.rmtree(self.cache, ignore_errors=True)
+            df = _sync_async(
+                self.fetch, time, variable, fields, timeout=self.async_timeout
+            )
+        finally:
+            # Delete cache if needed
+            if not self._cache:
+                shutil.rmtree(self.cache, ignore_errors=True)
 
         return df
 
@@ -227,14 +220,10 @@ class ISD:
             ISD data frame
         """
         if self.fs is None:
-            raise ValueError(
-                "File store is not initialized! If you are calling this "
-                "function directly make sure the data source is initialized inside the "
-                "async loop!"
-            )
+            await self._async_init()
 
         # https://filesystem-spec.readthedocs.io/en/latest/async.html#using-from-async
-        session = await self.fs.set_session(refresh=True)
+        session = await self.fs.set_session(refresh=True)  # type: ignore[union-attr]
 
         time, variable = prep_data_inputs(time, variable)
         schema = self.resolve_fields(fields)
@@ -250,7 +239,7 @@ class ISD:
                 raise e
 
         # Load dataframes for each station-year (cached parquet if available)
-        func_map: list[asyncio.Task[_StationData]] = []
+        func_map: list[Any] = []
         for station in self.stations:
             for dt in time:
                 func_map.append(  # noqa: PERF401
@@ -270,8 +259,8 @@ class ISD:
                 df = station_year_dfs[index]
                 index += 1
 
-                tmin = dt - self.tolerance
-                tmax = dt + self.tolerance
+                tmin = dt + self._tolerance_lower
+                tmax = dt + self._tolerance_upper
 
                 if df.empty:
                     continue
@@ -289,6 +278,7 @@ class ISD:
         if not df.empty:
             df = df.rename(columns=self.column_map())
             df["station"] = df["station"].astype(str)
+            df["source"] = df["source"].astype(str)
             # Normalize longitude from [-180, 180) to [0, 360)
             if "lon" in df.columns:
                 df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
@@ -341,7 +331,13 @@ class ISD:
             value_name="observation",
         )
         df_long = df_long.dropna(subset=["observation"]).reset_index(drop=True)
-        return df_long[[name for name in schema.names]]
+        df_long = df_long[[name for name in schema.names]]
+        for field in schema:
+            if field.name in df_long.columns and pa.types.is_floating(field.type):
+                df_long[field.name] = df_long[field.name].astype(
+                    field.type.to_pandas_dtype()
+                )
+        return df_long
 
     async def _fetch_station_year(self, station_id: str, year: int) -> pd.DataFrame:
         """Async method for fetching csv to given station

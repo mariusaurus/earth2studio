@@ -14,10 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import zipfile
 from collections import OrderedDict
 from collections.abc import Generator, Iterator
-from pathlib import Path
+from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -27,6 +26,7 @@ from earth2studio.models.batch import batch_coords, batch_func
 from earth2studio.models.px.base import PrognosticModel
 from earth2studio.models.px.utils import PrognosticMixin
 from earth2studio.utils import handshake_coords, handshake_dim
+from earth2studio.utils.checkpoint import bind_checkpoint_state
 from earth2studio.utils.imports import (
     OptionalDependencyFailure,
     check_optional_dependencies,
@@ -69,7 +69,13 @@ VARIABLES = [
 ]
 
 
-@check_optional_dependencies()
+@dataclass
+class _FCNCheckpointState:
+    x: torch.Tensor | None = None
+    coord_keys: tuple[str, ...] = ()
+    coord_values: tuple[np.ndarray, ...] = ()
+
+
 class FCN(torch.nn.Module, AutoModelMixin, PrognosticMixin):
     """FourCastNet global prognostic model. Consists of a single model with a time-step
     size of 6 hours. FourCastNet operates on 0.25 degree lat-lon grid (south-pole
@@ -81,7 +87,7 @@ class FCN(torch.nn.Module, AutoModelMixin, PrognosticMixin):
     paper. For additional information see the following resources:
 
     - https://arxiv.org/abs/2202.11214
-    - https://catalog.ngc.nvidia.com/orgs/nvidia/teams/modulus/models/modulus_fcn
+    - https://huggingface.co/nvidia/fourcastnet1
 
     Parameters
     ----------
@@ -91,6 +97,10 @@ class FCN(torch.nn.Module, AutoModelMixin, PrognosticMixin):
         Model center normalization tensor of size [26]
     scale : torch.Tensor
         Model scale normalization tensor of size [26]
+
+    Badges
+    ------
+    region:global class:mrf product:wind product:temp product:atmos year:2022 gpu:40gb
     """
 
     def __init__(
@@ -103,6 +113,7 @@ class FCN(torch.nn.Module, AutoModelMixin, PrognosticMixin):
         self.model = core_model
         self.register_buffer("center", center)
         self.register_buffer("scale", scale)
+        self.checkpoint = bind_checkpoint_state(_FCNCheckpointState())
 
     # sphinx - coords start
     def input_coords(self) -> CoordSystem:
@@ -173,11 +184,42 @@ class FCN(torch.nn.Module, AutoModelMixin, PrognosticMixin):
     ) -> str:
         return "fcn"
 
+    def _restore_checkpoint_state(
+        self, x: torch.Tensor, coords: CoordSystem
+    ) -> tuple[torch.Tensor, CoordSystem, bool]:
+        if (
+            self.checkpoint.checkpoint_level == 2
+            and self.checkpoint.checkpoint_state_loaded
+            and self.checkpoint.x is not None
+            and self.checkpoint.coord_keys
+        ):
+            x = self.checkpoint.x.to(x.device)
+            coords = OrderedDict(
+                (key, np.asarray(value).copy())
+                for key, value in zip(
+                    self.checkpoint.coord_keys, self.checkpoint.coord_values
+                )
+            )
+            return x, coords, True
+        return x, coords, False
+
+    def _save_checkpoint_state(self, x: torch.Tensor, coords: CoordSystem) -> None:
+        if self.checkpoint.checkpoint_enabled and self.checkpoint.checkpoint_level == 2:
+            self.checkpoint.x = x.detach().clone().to(self.checkpoint.device)
+            self.checkpoint.coord_keys = tuple(coords.keys())
+            self.checkpoint.coord_values = tuple(
+                np.asarray(value).copy() for value in coords.values()
+            )
+        else:
+            self.checkpoint.x = None
+            self.checkpoint.coord_keys = ()
+            self.checkpoint.coord_values = ()
+
     @classmethod
     def load_default_package(cls) -> Package:
         """Load prognostic package"""
         return Package(
-            "ngc://models/nvidia/modulus/modulus_fcn@v0.2",
+            "hf://nvidia/fourcastnet1@c67a63995f6c8e0e557eb3d791f32f437e9b02d5",
             cache_options={
                 "cache_storage": Package.default_cache("fcn"),
                 "same_names": True,
@@ -191,20 +233,16 @@ class FCN(torch.nn.Module, AutoModelMixin, PrognosticMixin):
         package: Package,
     ) -> PrognosticModel:
         """Load prognostic from package"""
-        fcn_zip = Path(package.resolve("fcn.zip"))
-        # Have to manually unzip here. Should not zip checkpoints in the future
-        with zipfile.ZipFile(fcn_zip, "r") as zip_ref:
-            zip_ref.extractall(fcn_zip.parent)
+        try:
+            package.resolve("config.json")  # HF tracking download statistics
+        except FileNotFoundError:
+            pass
 
-        model = AFNO.from_checkpoint(str(fcn_zip.parent / Path("fcn/fcn.mdlus")))
+        model = AFNO.from_checkpoint(package.resolve("fcn.mdlus"))
         model.eval()
 
-        local_center = torch.Tensor(
-            np.load(str(fcn_zip.parent / Path("fcn/global_means.npy")))
-        )
-        local_std = torch.Tensor(
-            np.load(str(fcn_zip.parent / Path("fcn/global_stds.npy")))
-        )
+        local_center = torch.Tensor(np.load(package.resolve("global_means.npy")))
+        local_std = torch.Tensor(np.load(package.resolve("global_stds.npy")))
         return cls(model, center=local_center, scale=local_std)
 
     @torch.inference_mode()
@@ -237,9 +275,11 @@ class FCN(torch.nn.Module, AutoModelMixin, PrognosticMixin):
         tuple[torch.Tensor, CoordSystem]
             Output tensor and coordinate system 6 hours in the future
         """
+        x, coords, _ = self._restore_checkpoint_state(x, coords)
         output_coords = self.output_coords(coords)
 
         x = self._forward(x)
+        self._save_checkpoint_state(x, output_coords)
 
         return x, output_coords
 
@@ -248,10 +288,13 @@ class FCN(torch.nn.Module, AutoModelMixin, PrognosticMixin):
         self, x: torch.Tensor, coords: CoordSystem
     ) -> Generator[tuple[torch.Tensor, CoordSystem], None, None]:
         coords = coords.copy()
+        x, coords, restored = self._restore_checkpoint_state(x, coords)
 
         self.output_coords(coords)
 
-        yield x, coords
+        if not restored:
+            self._save_checkpoint_state(x, coords)
+            yield x, coords
 
         while True:
             # Front hook
@@ -263,6 +306,7 @@ class FCN(torch.nn.Module, AutoModelMixin, PrognosticMixin):
 
             # Rear hook
             x, coords = self.rear_hook(x, coords)
+            self._save_checkpoint_state(x, coords)
 
             yield x, coords.copy()
 

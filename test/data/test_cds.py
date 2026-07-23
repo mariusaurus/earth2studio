@@ -17,11 +17,20 @@
 import datetime
 import pathlib
 import shutil
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 
 from earth2studio.data import CDS
+
+CDS_API_URL = "https://cds.climate.copernicus.eu/api"
+
+
+@pytest.fixture(autouse=True)
+def _set_cdsapi_url(monkeypatch):
+    """Point cdsapi at the CDS endpoint for all tests in this module."""
+    monkeypatch.setenv("CDSAPI_URL", CDS_API_URL)
 
 
 @pytest.mark.slow
@@ -140,3 +149,17 @@ def test_cds_available(time, variable):
     with pytest.raises(ValueError):
         ds = CDS()
         ds(time, variable)
+
+
+@patch("earth2studio.data.cds.cdsapi")
+def test_cds_lazy_client_init(mock_cdsapi, tmp_path, monkeypatch):
+    """Test that cdsapi.Client is created lazily, not during __init__."""
+    monkeypatch.setenv("EARTH2STUDIO_CACHE", str(tmp_path))
+
+    ds = CDS()
+    assert ds._cds_client is None
+    mock_cdsapi.Client.assert_not_called()
+
+    # Access the property to trigger lazy init
+    _ = ds.cds_client
+    mock_cdsapi.Client.assert_called_once()

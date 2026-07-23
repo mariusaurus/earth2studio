@@ -23,7 +23,7 @@ climate science.
 [Install][e2studio_install_url] | [User-Guide][e2studio_userguide_url] |
 [Examples][e2studio_examples_url] | [API][e2studio_api_url]
 
-![Earth2Studio Banner](https://huggingface.co/datasets/nvidia/earth2studio-assets/resolve/0.1.0/readme/earth2studio_feature_banner.png?id=1)
+![Earth2Studio README hero](https://huggingface.co/datasets/nvidia/earth2studio-assets/resolve/main/readme/v2/earth2studio-readme-hero.png?v2)
 
 </div>
 
@@ -37,6 +37,35 @@ Running AI weather prediction can be done with just a few lines of code.
     workflow samples.
 - Swap out [data sources][e2studio_data_api] or [models][e2studio_px_api] depending on
     your use case!
+
+### Tutorial
+
+[![Earth2Studio Tutorial](https://huggingface.co/datasets/nvidia/earth2studio-assets/resolve/main/readme/v2/earth2studio-readme-quickstart-video.png?v1)](https://www.youtube.com/watch?v=Sog6aCapZeA)
+
+### Agent-assisted setup
+
+Automate setup with your preferred coding agent using NVIDIA Earth2Studio skills.
+Install the Earth2Studio skill set, then ask your favorite agent (Claude, Codex, OpenCode, etc) to
+recommend a model, configure an environment, or run a first deterministic forecast.
+Find more Earth2Studio skills in the [NVIDIA Skills catalog](https://build.nvidia.com/skills?q=earth2studio).
+
+![Earth2Studio agentic setup](https://huggingface.co/datasets/nvidia/earth2studio-assets/resolve/main/readme/v2/earth2studio-readme-agent-setup.png?v1)
+
+```bash
+npx skills add NVIDIA/skills --skill earth2studio-install
+npx skills add NVIDIA/skills --skill earth2studio-discover
+npx skills add NVIDIA/skills --skill earth2studio-data-fetch
+npx skills add NVIDIA/skills --skill earth2studio-deterministic-forecast
+```
+
+Example agent prompts:
+
+```text
+Use the Earth2Studio discover skill to recommend a starter forecast workflow.
+Use the Earth2Studio install skill to set up my environment for FourCastNet3 inference.
+Create a script to fetch ERA5 surface winds data for March 2024.
+Create a deterministic forecast workflow with GFS, FourCastNet3, and a Zarr output store.
+```
 
 ### NVIDIA FourCastNet3
 
@@ -89,24 +118,24 @@ run(["2025-01-01T00:00:00"], 4, model, data, io)
 > Links to the original license and source are often provided in the API docs for each
 > model/data source.
 
-[![Watch the video](https://img.youtube.com/vi/Sog6aCapZeA/hqdefault.jpg)](https://www.youtube.com/watch?v=Sog6aCapZeA)
-
 ## Latest News
 
-- [**StormScope**](https://nvidia.github.io/earth2studio/modules/generated/models/px/earth2studio.models.px.StormScopeGOES.html),
-    NVIDIA's latest regional nowcasting model, is now available in
-    Earth2Studio with a dedicated [inference example](https://nvidia.github.io/earth2studio/examples/20_stormscope_goes_example.html)
-    to demonstrate its use for predicting CONUS satellite and radar data.
-- [**Atlas**](https://nvidia.github.io/earth2studio/modules/generated/models/px/earth2studio.models.px.Atlas.html),
-    NVIDIA's latest medium range model, is now available in Earth2Studio
-    providing *state-of-the-art* accuracy for medium range global forecasts.
-- [**CorrDiff for CMIP6 to ERA5**](https://nvidia.github.io/earth2studio/modules/generated/models/dx/earth2studio.models.dx.CorrDiffCMIP6.html)
-    is a novel generative downscaling model to generate ERA5 fields from CMIP
-    data enabling users to run ERA5 based prognostic and diagnostic models on future
-    climate simulations.
-- **ECMWF AIFSENS** model wrapper added, an ensemble-based probablistic data driven
-    forecast model developed by the European Centre for Medium-Range Weather Forecasts
-    (ECMWF).
+> [!NOTE]
+> As of version `0.14.0`, Earth2Studio TOML default installs now target CUDA 13.
+
+- [**AIFS 2.0**](https://nvidia.github.io/earth2studio/modules/generated/models/px/earth2studio.models.px.AIFS2.html),
+    ECMWF's AIFS 2.0 prognostic model with wave and 10 hPa pressure level support,
+    plus an ensemble variant (`AIFS2ENS`) with stochastic noise injection.
+- [**U-CAST**](https://nvidia.github.io/earth2studio/modules/generated/models/px/earth2studio.models.px.UCast.html),
+    U-CAST prognostic model with 1.5-degree global ERA5 forecasting support.
+- [**CFS Forecast Sources**](https://nvidia.github.io/earth2studio/modules/generated/data/earth2studio.data.CFS_FX.html),
+    NCEP CFSv2 operational forecast and 9-month reforecast data sources backed by
+    NOMADS and the AWS Open Data mirror.
+- [**IBTrACS**](https://nvidia.github.io/earth2studio/modules/generated/data/earth2studio.data.IBTrACS.html),
+    tropical cyclone best-track DataFrame source for historical storm analysis.
+- **Checkpoint/Restart**, session utilities and restart support for deterministic,
+    diagnostic, and ensemble inference workflows. Individual model support is rolling
+    out progressively.
 
 For a complete list of latest features and improvements see the [changelog](./CHANGELOG.md).
 
@@ -118,7 +147,8 @@ architectures, data sources and SciML tooling while providing a unified API.
 
 <div align="center">
 
-![Earth2Studio Overview 1](https://huggingface.co/datasets/nvidia/earth2studio-assets/resolve/0.1.0/readme/earth2studio-readme-overview-1.png?id=1)
+![Earth2Studio model zoo](https://huggingface.co/datasets/nvidia/earth2studio-assets/resolve/main/readme/v2/earth2studio-readme-model-zoo.png?v3)
+![Earth2Studio data sources](https://huggingface.co/datasets/nvidia/earth2studio-assets/resolve/main/readme/v2/earth2studio-readme-data-sources.png?v3)
 
 </div>
 
@@ -128,7 +158,7 @@ data sources, AI models and other modules together.
 
 <div align="center">
 
-![Earth2Studio Overview 1](https://huggingface.co/datasets/nvidia/earth2studio-assets/resolve/0.1.0/readme/earth2studio-readme-overview-2.png?id=1)
+![Earth2Studio composable pipelines](https://huggingface.co/datasets/nvidia/earth2studio-assets/resolve/main/readme/v2/earth2studio-readme-composability.png?v2)
 
 </div>
 
@@ -137,12 +167,6 @@ swap out components for alternatives.
 In addition to the largest model zoo of weather/climate AI models, Earth2Studio is
 packed with useful functionality such as optimized data access to cloud data stores,
 statistical operations and more to accelerate your pipelines.
-
-<div align="center">
-
-![Earth2Studio Overview 1](https://huggingface.co/datasets/nvidia/earth2studio-assets/resolve/0.1.0/readme/earth2studio-readme-overview-3.webp?id=1)
-
-</div>
 
 ### Earth-2 Open Models
 
@@ -181,9 +205,12 @@ Available models include but are not limited to:
 | FuXi | 0.25° | Transformer | 6h | Global |
 | AIFS | 0.25° | Transformer | 6h | Global |
 | AIFS Ensemble | 0.25° | Transformer Ensemble | 6h | Global |
+| AIFS 2.0 | 0.25° | Transformer | 6h | Global |
+| AIFS 2.0 Ensemble | 0.25° | Transformer Ensemble | 6h | Global |
+| U-CAST | 1.5° | UNet | 12h | Global |
 | StormCast | 3km | Diffusion + Regression | 1h | Regional (US) |
 | SFNO | 0.25° | Neural Operator | 6h | Global |
-| DLESyM | 0.25° | Convolutional | 6h | Global |
+| DLESyM | 1.0° | Convolutional | 6h | Global |
 
 For a complete list, see the [prognostic model API docs][e2studio_px_api].
 
@@ -345,7 +372,7 @@ Earth2Studio is provided under the Apache License 2.0, refer to the
 
 <!-- Badge links -->
 
-[e2studio_python_img]: https://img.shields.io/badge/Python-3.11%20|%203.12%20|%203.13-blue?style=flat-square&logo=python
+[e2studio_python_img]: https://img.shields.io/badge/Python-3.11%20|%203.12%20|%203.13%20|%203.14-blue?style=flat-square&logo=python
 [e2studio_license_img]: https://img.shields.io/badge/License-Apache%202.0-green?style=flat-square
 [e2studio_format_img]: https://img.shields.io/badge/Code%20Style-Black-black?style=flat-square
 [e2studio_mypy_img]: https://img.shields.io/badge/mypy-Checked-blue?style=flat-square&labelColor=grey
@@ -369,11 +396,11 @@ Earth2Studio is provided under the Apache License 2.0, refer to the
 [e2studio_api_url]: https://nvidia.github.io/earth2studio/modules/
 [e2studio_customization_url]: https://nvidia.github.io/earth2studio/examples/extend/index.html
 [e2studio_px_url]: https://nvidia.github.io/earth2studio/userguide/components/prognostic.html
-[e2studio_px_api]: https://nvidia.github.io/earth2studio/modules/models.html#earth2studio-models-px-prognostic
+[e2studio_px_api]: https://nvidia.github.io/earth2studio/modules/models_px.html
 [e2studio_dx_url]: https://nvidia.github.io/earth2studio/userguide/components/diagnostic.html
-[e2studio_dx_api]: https://nvidia.github.io/earth2studio/modules/models.html#earth2studio-models-dx-diagnostic
+[e2studio_dx_api]: https://nvidia.github.io/earth2studio/modules/models_dx.html
 [e2studio_data_url]: https://nvidia.github.io/earth2studio/userguide/components/datasources.html
-[e2studio_data_api]: https://nvidia.github.io/earth2studio/modules/datasources.html
+[e2studio_data_api]: https://nvidia.github.io/earth2studio/modules/datasources_analysis.html
 [e2studio_io_url]: https://nvidia.github.io/earth2studio/userguide/components/io.html
 [e2studio_io_api]: https://nvidia.github.io/earth2studio/modules/io.html
 [e2studio_pb_url]: https://nvidia.github.io/earth2studio/userguide/components/perturbation.html

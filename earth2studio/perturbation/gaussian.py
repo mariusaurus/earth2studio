@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -21,6 +22,7 @@ import torch
 from typing_extensions import Self
 
 from earth2studio.utils import handshake_dim
+from earth2studio.utils.checkpoint import bind_checkpoint_state
 from earth2studio.utils.imports import (
     OptionalDependencyFailure,
     check_optional_dependencies,
@@ -34,6 +36,11 @@ except ImportError:
     InverseRealSHT = None
 
 
+@dataclass
+class _GaussianCheckpointState:
+    generator_state: torch.Tensor | None = None
+
+
 class Gaussian:
     """Standard Gaussian peturbation
 
@@ -42,14 +49,21 @@ class Gaussian:
     noise_amplitude : float | Tensor, optional
         Noise amplitude, by default 0.05. If a tensor,
         this must be broadcastable with the input data.
+    seed : int | None, optional
+        Seed for the internal generator, by default None.
     """
 
-    def __init__(self, noise_amplitude: float | torch.Tensor = 0.05):
+    def __init__(
+        self, noise_amplitude: float | torch.Tensor = 0.05, seed: int | None = None
+    ):
         self.noise_amplitude = (
             noise_amplitude
             if isinstance(noise_amplitude, torch.Tensor)
             else torch.Tensor([noise_amplitude])
         )
+        self.generator: torch.Generator | None = None
+        self.seed = seed
+        self.checkpoint = bind_checkpoint_state(_GaussianCheckpointState())
 
     @torch.inference_mode()
     def __call__(
@@ -71,8 +85,47 @@ class Gaussian:
         tuple[torch.Tensor, CoordSystem]:
             Output tensor and respective coordinate system dictionary
         """
+        generator = self._get_generator(x.device)
+        pre_state = generator.get_state()
         noise_amplitude = self.noise_amplitude.to(x.device)
-        return x + noise_amplitude * torch.randn_like(x), coords
+        y = x + noise_amplitude * torch.randn(
+            x.shape, dtype=x.dtype, device=x.device, generator=generator
+        )
+        self._save_generator_state(pre_state, generator.get_state(), generator)
+        return y, coords
+
+    def _get_generator(self, device: torch.device) -> torch.Generator:
+        if self.generator is None or self.generator.device != device:
+            self.generator = torch.Generator(device=device)
+            if (
+                self.checkpoint.checkpoint_state_loaded
+                and self.checkpoint.generator_state is not None
+            ):
+                self.generator.set_state(self.checkpoint.generator_state.cpu())
+            elif self.seed is not None:
+                self.generator.manual_seed(self.seed)
+            else:
+                self.generator.seed()
+        return self.generator
+
+    def _save_generator_state(
+        self,
+        pre_state: torch.Tensor,
+        post_state: torch.Tensor,
+        generator: torch.Generator,
+    ) -> None:
+        if not self.checkpoint.checkpoint_enabled:
+            return
+
+        level = self.checkpoint.checkpoint_level
+        if level < 1:
+            self.checkpoint.generator_state = None
+            return
+
+        generator_state = pre_state if level == 1 else post_state
+        self.checkpoint.generator_state = generator_state.to(
+            self.checkpoint.device
+        ).clone()
 
 
 @check_optional_dependencies()
@@ -232,16 +285,18 @@ class CorrelatedSphericalField(torch.nn.Module):
         self.isht = InverseRealSHT(
             self.nlat, 2 * self.nlat, grid=grid, norm="backward"
         ).to(dtype=dtype)
+        self.lmax = self.isht.lmax
+        self.mmax = self.isht.mmax
 
         r_earth = 6.371e6
         # kT is defined on slide 7
         self.kT = (length_scale / r_earth) ** 2 / 2
-        F0 = self.calculateF0(self.sigma, self.phi, self.nlat, self.kT)
+        F0 = self.calculateF0(self.sigma, self.phi, self.lmax, self.kT)
 
         prods = (
-            torch.tensor([j * (j + 1) for j in range(0, self.nlat)])
-            .view(self.nlat, 1)
-            .repeat(1, self.nlat + 1)
+            torch.tensor([j * (j + 1) for j in range(0, self.lmax)])
+            .view(self.lmax, 1)
+            .repeat(1, self.mmax)
         )
 
         sigma_n = torch.tril(torch.exp(-self.kT * prods / 2) * F0)
@@ -260,7 +315,7 @@ class CorrelatedSphericalField(torch.nn.Module):
         # in the call function
         self.gaussian_noise = torch.distributions.normal.Normal(self.mean, self.var)
         xi = self.gaussian_noise.sample(
-            torch.Size((self.N, self.nlat, self.nlat + 1, 2))
+            torch.Size((self.N, self.lmax, self.mmax, 2))
         ).squeeze()
         xi = torch.view_as_complex(xi)
 
@@ -271,13 +326,13 @@ class CorrelatedSphericalField(torch.nn.Module):
         self.register_buffer("coeff", coeff)
 
     def calculateF0(
-        self, sigma: float, phi: float, nlat: int, kT: float
+        self, sigma: float, phi: float, lmax: int, kT: float
     ) -> torch.Tensor:
         """This function scales the coefficients such that their grid-point standarddeviation is sigma.
         sigma is the desired variance phi is a np.exp(-dt/time_scale)
         """
         numerator = sigma**2 * (1 - (phi**2))
-        wavenumbers = torch.arange(1, nlat)
+        wavenumbers = torch.arange(1, lmax)
         denominator = (2 * wavenumbers + 1) * torch.exp(
             -kT * wavenumbers * (wavenumbers + 1)
         )
@@ -298,7 +353,7 @@ class CorrelatedSphericalField(torch.nn.Module):
 
             # Sample Gaussian noise. # TODO why??? for next step maybe?
             xi = self.gaussian_noise.sample(
-                torch.Size((self.N, self.nlat, self.nlat + 1, 2))
+                torch.Size((self.N, self.lmax, self.mmax, 2))
             ).squeeze()
             xi = torch.view_as_complex(xi)
 

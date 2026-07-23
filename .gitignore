@@ -102,3 +102,9 @@ docs/examples
 
 # Pytestmon
 .testmondata*
+
+.claude/agent-memory
+.claude/agents
+
+# Skills
+skills/*/evals/results/

@@ -104,6 +104,10 @@ class CBottle3D(torch.nn.Module, AutoModelMixin):
         Does nothing at the moment, by default False
     verbose : bool, optional
         Print generation progress, by default True
+
+    Badges
+    ------
+    region:global dataclass:simulation product:wind product:precip product:temp product:atmos product:ocean
     """
 
     VARIABLES = np.array(list(CBottleLexicon.VOCAB.keys()))
@@ -131,7 +135,7 @@ class CBottle3D(torch.nn.Module, AutoModelMixin):
         self.seed = seed
         self.dataset_modality = DatasetModality(dataset_modality)
         self._core_model = core_model  # Needed to move model to device
-        self.core_model = CBottle3d(core_model)
+        self.core_model = CBottle3d(core_model, device="cpu")
 
         self._cache = cache
         self._verbose = verbose
@@ -194,7 +198,9 @@ class CBottle3D(torch.nn.Module, AutoModelMixin):
             varidx.append(idx[0])
         varidx = np.array(varidx)
 
-        device = self.device_buffer.device
+        # Use core model's parameter device since cbottle generates latents
+        # and runs inference on the device where model parameters reside
+        device = self.core_model.device
         condition = input["condition"].to(device)
         labels = input["labels"].to(device)
         images = input["target"].to(device)
@@ -436,9 +442,9 @@ class CBottle3D(torch.nn.Module, AutoModelMixin):
             pass
 
         # The following code is left here for reference of how to access the AMIP SST
-        # data from the original data store. NGC is faster and cleaner so it is also
+        # data from the original data store. HF is faster and cleaner so it is also
         # provided there.
-        # sst_url = "https://esgf.ceda.ac.uk/thredds/dodsC/esg_cmip6/input4MIPs/CMIP6Plus/CMIP/PCMDI/PCMDI-AMIP-1-1-9/ocean/mon/tosbcs/gn/v20230512/"
+        # sst_url = "https://esgf.ceda.ac.uk/thredds/catalog/esg_cmip6/input4MIPs/CMIP6Plus/CMIP/PCMDI/PCMDI-AMIP-1-1-9/ocean/mon/tosbcs/gn/v20230512/"
         # sst_file = (
         #     "tosbcs_input4MIPs_SSTsAndSeaIce_CMIP_PCMDI-AMIP-1-1-9_gn_187001-202212.nc"
         # )

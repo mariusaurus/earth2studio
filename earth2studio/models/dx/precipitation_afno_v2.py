@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
 from collections import OrderedDict
 from datetime import datetime, timezone
 
@@ -74,6 +75,11 @@ class PrecipitationAFNOv2(torch.nn.Module, AutoModelMixin):
     inputs and outputs one on a 0.25 degree lat-lon grid (south-pole excluding)
     [720 x 1440].
 
+    Warning
+    -------
+    PrecipitationAFNOv2 performs worse than PrecipitationAFNO v1 and will be
+    deprecated in upcoming releases.
+
     Note
     ----
     For more information on the model, please refer to:
@@ -92,6 +98,10 @@ class PrecipitationAFNOv2(torch.nn.Module, AutoModelMixin):
         Model center normalization tensor of size [20,1,1]
     scale : torch.Tensor
         Model scale normalization tensor of size [20,1,1]
+
+    Badges
+    ------
+    region:global class:mrf product:precip year:2024 gpu:40gb
     """
 
     def __init__(
@@ -103,6 +113,12 @@ class PrecipitationAFNOv2(torch.nn.Module, AutoModelMixin):
         scale: torch.Tensor,
     ):
         super().__init__()
+        warnings.warn(
+            "PrecipitationAFNOv2 performs worse than PrecipitationAFNO v1 and "
+            "will be deprecated in upcoming releases.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
         self.core_model = core_model
         self.register_buffer("center", center)
         self.register_buffer("scale", scale)
